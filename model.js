@@ -17,7 +17,7 @@ function node(type,text,box,props={}) {
 }
 function bounds(page,device,project){
  if(page.kind==='window')return [Math.min(page.width,project.widths[device]-24),page.height];
- return [project.widths[device],Math.max(devices[device][1],...page.nodes.map(n=>{const b=boxFor(n,device,project,page);return n.hide?.[device]?0:b[1]+b[3]+10}))];
+ return [project.widths[device],Math.max(devices[device][1],...page.nodes.map(n=>{const b=boxFor(n,device,project,page);return n.hide?.[device]?0:b[1]+b[3]}))];
 }
 function boxFor(n,device,p,page){
  const box=n.boxes[device]||n.boxes.laptop;

@@ -19,7 +19,7 @@ function makeEl(n,b,edit=false){
  const holder=document.createElement('template');holder.innerHTML=markup(n);const el=holder.content.firstElementChild;
  el.className='object';el.dataset.id=n.id;el.dataset.type=n.type;for(const [k,v] of Object.entries(cssProps(n,b)))el.style.setProperty(k,v);
  if(n.type==='Custom'){if(!edit)el.setAttribute('sandbox','allow-scripts');el.srcdoc=customDoc(n)}
- if(n.type==='Text')el.style.justifyContent={left:'flex-start',center:'center',right:'flex-end'}[n.style.align];
+ if(n.type==='Text'||n.type==='Button')el.style.justifyContent={left:'flex-start',center:'center',right:'flex-end'}[n.style.align];
  if(edit){el.tabIndex=-1;if(el.tagName==='INPUT')el.readOnly=true}
  return el
 }

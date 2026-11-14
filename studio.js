@@ -27,7 +27,7 @@ function render(){clean();$('#projectName').textContent=project.name;
  $('#tabs').innerHTML=tabs.map(t=>'<button data-tab="'+t+'" class="'+(tab===t?'active':'')+'">'+icon(t.toLowerCase())+t+'</button>').join('');
  $('#pageBtn').innerHTML=icon(page().kind==='window'?'window':'page',15)+esc(page().name)+icon('down',13);
  $('#devices').innerHTML=Object.keys(devices).map(d=>'<button title="'+cap(d)+' layout" aria-label="'+cap(d)+' layout" class="'+(d===device?'active':'')+'" data-device="'+d+'">'+icon(d,15)+'<span>'+cap(d)+'</span></button>').join('');
- $('button[data-cmd=undo]').innerHTML=icon('undo',15);$('button[data-cmd=undo]').disabled=!past.length;
+ $('button[data-cmd=undo]').innerHTML=icon('undo',15)+'<span>Undo</span>';$('button[data-cmd=undo]').disabled=!past.length;
  $('button[data-cmd=redo]').innerHTML=icon('redo',15);$('button[data-cmd=redo]').disabled=!future.length;
  $('button[data-cmd=preview]').innerHTML=icon('preview',14)+'Preview';$('button[data-cmd=export]').innerHTML=icon('export',14)+'Export';
  $('#selectTool').innerHTML=icon('select',15);$('#panTool').innerHTML=icon('pan',16);$('#selectTool').classList.toggle('on',!panMode);$('#panTool').classList.toggle('on',panMode);$('#sizeBtn').innerHTML=icon('ruler',13)+project.widths[device]+' px '+icon('down',11);
@@ -78,7 +78,8 @@ function drawProps(){
  body+='<div class="part"><h3>Appearance</h3>'+colorControl('Fill','fill',n.style.fill)+colorControl('Text','color',n.style.color)+'<label class="propRow">Corner radius<span class="dim" style="width:102px"><input type="number" min="0" data-style="radius" value="'+n.style.radius+'">px</span></label><label class="propRow">Font size<span class="dim" style="width:102px"><input type="number" min="1" data-style="fontSize" value="'+n.style.fontSize+'">px</span></label></div>';
  body+='<div class="part"><h3>Interactions</h3>'+(n.actions.length?n.actions.map((a,i)=>'<button class="actLine" data-editaction="'+i+'">'+icon('triggers',14)+actName(a)+'</button>').join(''):btn('add-action','Add trigger','triggers','btn smallBtn'))+'</div><div class="part">'+btn('save-selected','Save as template','library','btn full')+'</div>'
  }
- $('#inspector').innerHTML=head+body;const code=$('#elementCode');if(code){code.setSelectionRange(0,code.value.length);code.scrollTop=0}
+ if(mode==='design'&&n)body='<div class="arrangeEntry">'+btn('arrange','Arrange','sliders','btn full')+'</div>'+body;
+ $('#inspector').innerHTML=head+body;$('#arrangeTool').disabled=!selected.length;const code=$('#elementCode');if(code){code.setSelectionRange(0,code.value.length);code.scrollTop=0}
 }
 function colorControl(label,k,v){const actual=v==='var(--accent)'?project.theme.accent:/^#[a-f\d]{6}$/i.test(v)?v:'#ffffff';return '<label class="colorRow">'+label+'<span class="colorBox"><input type="color" data-style="'+k+'" value="'+actual+'">'+esc(v==='var(--accent)'?actual.toUpperCase():v)+'</span></label>'}
 function sourceFor(n){
@@ -224,7 +225,7 @@ function command(c){
  if(c.startsWith('use-'))return useTemplate(project.templates.find(t=>t.id===c.slice(4)));
  const n=sel();
  switch(c){
- case 'undo':history(true);break;case 'redo':history(false);break;
+ case 'arrange':arrangeDialog();break;case 'undo':history(true);break;case 'redo':history(false);break;
  case 'preview':preview();break;case 'export':exportDialog();break;case 'dismiss':dismiss();break;
  case 'apply-code':applySelection();break;case 'copy-chat':copyForChat();break;case 'select-code':selectCode();break;case 'cloud':cloudDialog();break;case 'save-selected':saveSelected();break;case 'pages':pagesDialog();break;case 'page-settings':pageSettings();break;
  case 'signin':case 'blank':case 'ledger':addScreen(c);break;
@@ -293,6 +294,7 @@ document.addEventListener('dragstart',e=>{const b=e.target.closest('[data-insert
 stage.addEventListener('dragover',e=>e.preventDefault());stage.addEventListener('drop',e=>{e.preventDefault();const t=e.dataTransfer.getData('text/plain').replace('formstudio:','');if(types.includes(t)){const r=$('#sheet').getBoundingClientRect();variantDialog(t,[(e.clientX-r.left)/scale,(e.clientY-r.top)/scale])}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){dismiss();closeSide();return}if(e.target.closest('textarea,input,select,[contenteditable],.dialog')||$('#overlay').children.length)return;
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();history(!e.shiftKey)}
+ else if(e.key.toLowerCase()==='a'&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&selected.length){e.preventDefault();arrangeDialog()}
  else if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();removeSelection()}
  else if(e.key==='/'){e.preventDefault();tab='Insert';render();if(innerWidth<=620)$('#library').classList.add('shown');$('#search').focus()}
  else if(selected.length&&['ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();const step=e.shiftKey?10:1;change(()=>{for(const n of page().nodes.filter(n=>selected.includes(n.id))){const b=boxFor(n,device,project,page());b[e.key==='ArrowRight'||e.key==='ArrowLeft'?0:1]+=(['ArrowLeft','ArrowUp'].includes(e.key)?-step:step);setBox(n,b,device,project,page())}})}

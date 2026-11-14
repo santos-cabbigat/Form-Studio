@@ -19,7 +19,7 @@ function change(fn,msg){remember();preserveColumnLinks(project);const before=lin
 function clean(){if(!project.pages.some(p=>p.id===pageId))pageId=project.pages[0].id;selected=selected.filter(id=>page().nodes.some(n=>n.id===id))}
 function history(back){const from=back?past:future,to=back?future:past;if(!from.length)return;to.push(JSON.stringify(project));project=JSON.parse(from.pop());clean();write();render()}
 function dismiss(){ $('#overlay').replaceChildren() }
-function modal(title,body,wide=false){$('#overlay').innerHTML='<div class="dialogBg"><section class="dialog '+(wide?'wide':'')+'" role="dialog" aria-modal="true" aria-label="'+esc(title)+'"><header class="dialogHead"><h2>'+esc(title)+'</h2>'+btn('dismiss','', 'close','')+'</header>'+body+'</section></div>';let first=$('.dialog input,.dialog select,.dialog textarea');if(first&&!first.readOnly&&first.tagName!=='TEXTAREA')first.focus()}
+function modal(title,body,wide=false){$('#overlay').innerHTML='<div class="dialogBg"><section class="dialog '+(wide?'wide':'')+'" role="dialog" aria-modal="true" aria-label="'+esc(title)+'"><header class="dialogHead"><h2>'+esc(title)+'</h2>'+btn('dismiss','Close','close','btn smallBtn')+'</header>'+body+'</section></div>';let first=$('.dialog input,.dialog select,.dialog textarea');if(first&&!first.readOnly&&first.tagName!=='TEXTAREA')first.focus()}
 function closeSide(){for(const s of ['.library','.inspector'])$(s).classList.remove('shown')}
 function choosePage(id){endReferencePick();closeSide();panMode=false;pageId=id;selected=[];multi=false;zoomFactor=1;pan=[0,0];dismiss();render()}
 function selectIds(ids){
@@ -46,9 +46,9 @@ function render(){clean();if(referencePick&&referencePick.context!==referenceCon
  $('#pageBtn').innerHTML=icon(page().kind==='window'?'window':'page',15)+esc(page().name)+icon('down',13);
  $('#devices').innerHTML=Object.keys(devices).map(d=>'<button title="'+cap(d)+' layout" aria-label="'+cap(d)+' layout" class="'+(d===device?'active':'')+'" data-device="'+d+'">'+icon(d,15)+'<span>'+cap(d)+'</span></button>').join('');
  $('button[data-cmd=undo]').innerHTML=icon('undo',15)+'<span>Undo</span>';$('button[data-cmd=undo]').disabled=!past.length;
- $('button[data-cmd=redo]').innerHTML=icon('redo',15);$('button[data-cmd=redo]').disabled=!future.length;
+ $('button[data-cmd=redo]').innerHTML=icon('redo',15)+'Redo';$('button[data-cmd=redo]').disabled=!future.length;
  $('button[data-cmd=preview]').innerHTML=icon('preview',14)+'Preview';$('button[data-cmd=export]').innerHTML=icon('export',14)+'Export';
- $('#selectTool').innerHTML=icon('select',15);$('#panTool').innerHTML=icon('pan',16);$('#selectTool').classList.toggle('on',!panMode);$('#panTool').classList.toggle('on',panMode);$('#sizeBtn').innerHTML=icon('ruler',13)+project.widths[device]+' px '+icon('down',11);
+ $('#selectTool').innerHTML=icon('select',15)+'Select';$('#panTool').innerHTML=icon('pan',16)+'Pan';$('#selectTool').classList.toggle('on',!panMode);$('#panTool').classList.toggle('on',panMode);$('#sizeBtn').innerHTML=icon('ruler',13)+project.widths[device]+' px '+icon('down',11);
  drawLibrary();drawBoard();drawProps();syncGuideButton();$('#multiTool').classList.toggle('on',multi);$('#multiTool').setAttribute('aria-pressed',String(multi))
 }
 const canvasLayers=new Map();
@@ -63,7 +63,7 @@ function markCanvasLayer(id,on){
 function drawBoard(){
  const s=$('#sheet'),pg=page(),[w,h]=bounds(pg,device,project);
  if(latestBoard!==pg){s.replaceChildren();canvasLayers.clear();latestBoard=pg}
- s.style.width=w+'px';s.style.height=h+'px';s.style.backgroundColor=pg.backgrounds?.[device]||project.theme.background;s.style.fontFamily=project.theme.font;s.style.setProperty('--accent',project.theme.accent);
+ s.style.width=w+'px';s.style.height=h+'px';s.style.backgroundColor=pg.backgrounds?.[device]||project.theme.background;s.style.fontFamily=project.theme.font;s.style.setProperty('--accent',project.theme.accent);s.style.setProperty('--table-tint',project.theme.tint||'#f3effa');
  const visible=new Set(),chosen=new Set(selected);
  let next=s.firstElementChild;
  for(const n of pg.nodes){
@@ -101,7 +101,7 @@ function fitBoard(){
  const context=pageId+'/'+device+'/'+long;
  if(context!==boardContext){boardViewport.scrollTop=0;boardContext=context}
  else if(long&&scale!==previousScale)boardViewport.scrollTop=previousScroll*scale/previousScale;
- $('#zoom').textContent=Math.round(scale*100)+'%';
+ $('#zoom').textContent='Fit '+Math.round(scale*100)+'%';
 }
 function preset(cmd,title,ic,color=''){return '<button data-cmd="'+cmd+'" class="preset"><span class="presetIcon '+color+'">'+icon(ic,16)+'</span><span>'+esc(title)+'</span>'+icon('right',13)+'</button>'}
 function section(title,body){return '<section class="libSection"><h3 class="sectionTitle">'+esc(title)+'</h3>'+body+'</section>'}
@@ -129,12 +129,12 @@ function drawLibrary(){
  }else if(tab==='Palette'){
  pane='<div class="panel"><h2>Color palette</h2><p>Apply a swatch to the selected element’s fill.</p><div class="swatches">'+project.palette.map(c=>'<button class="swatch" data-swatch="'+esc(c)+'" style="background:'+esc(c)+'" title="Apply '+esc(c)+'"></button>').join('')+'</div>'+field('Add a custom color','<input type="color" id="newColor" value="#a28bc2">')+colorPickButton('palette','palette color')+btn('add-color','Save color','plus','btn')+'<h3 class="mt">Palette presets</h3>'+['Studio violet','Coastal green','Warm clay'].map((v,i)=>'<button class="variant" data-palette="'+i+'">'+v+icon('right',13)+'</button>').join('')+'</div>'
  }else{
- pane='<div class="panel"><h2>Theme</h2>'+field('Project font','<select data-theme="font">'+options(families,project.theme.font)+'</select>')+themeColor('Accent','accent')+themeColor('Canvas background','background')+'<p>Theme settings apply across the project. Buttons using the accent color update together.</p></div>'
+ pane='<div class="panel"><h2>Theme</h2>'+themePicker()+field('Project font','<select data-theme="font">'+options(families,project.theme.font)+'</select>')+themeColor('Accent','accent')+themeColor('Canvas background','background')+'<p>Theme settings apply across the project. Buttons using the accent color update together.</p></div>'
  }
  $('#library').innerHTML=pane
 }
 function themeColor(l,k){return field(l,'<input type="color" data-theme="'+k+'" value="'+esc(project.theme[k])+'">')+colorPickButton(k,l)}
-function templateRows(q,onlyTrigger=false){return project.templates.filter(t=>(!onlyTrigger||t.kind==='trigger')&&t.name.toLowerCase().includes(q.toLowerCase())).map(t=>'<div class="templateRow">'+preset('use-'+t.id,t.name,t.kind==='trigger'?'triggers':t.kind==='window'?'window':t.kind==='block'?'group':'code')+'<button data-edittemplate="'+t.id+'" title="Manage template" aria-label="Manage '+esc(t.name)+'">⋯</button></div>').join('')}
+function templateRows(q,onlyTrigger=false){return project.templates.filter(t=>(!onlyTrigger||t.kind==='trigger')&&t.name.toLowerCase().includes(q.toLowerCase())).map(t=>'<div class="templateRow">'+preset('use-'+t.id,t.name,t.kind==='trigger'?'triggers':t.kind==='window'?'window':t.kind==='block'?'group':'code')+'<button data-edittemplate="'+t.id+'" title="Manage template" aria-label="Manage '+esc(t.name)+'">Manage</button></div>').join('')}
 function syncCodeSize(expanded){
  const panel=$('#inspector'),control=panel.querySelector('[data-cmd=expand-code]');
  panel.classList.toggle('wideCode',Boolean(control&&expanded));
@@ -221,19 +221,21 @@ function parseElement(n,code){
  setBox(draft,b,device,project,page());return draft
 }
 function insertNode(n,at){
+ const preset=projectPresets.find(t=>t.name===project.theme.preset);if(preset)styleLayerForTheme(n,preset);
  const pg=page(),[w,h]=bounds(pg,device,project),b=boxFor(n,device,project,pg);b[2]=Math.min(b[2],w-12);b[0]=Math.max(0,Math.min(w-b[2],at?.[0]??Math.round((w-b[2])/2)));b[1]=Math.max(0,Math.min(h-b[3],at?.[1]??Math.round((h-b[3])/2)));setBox(n,b,device,project,pg);
  change(()=>{pg.nodes.push(n);selected=[n.id]});dismiss();closeSide()
 }
 function addScreen(type){
  let p=type==='picker-demo'?pickerDemoScreen():['sample-entry','linked-entry'].includes(type)?sampleEntryScreen():type==='signin'?intro().pages[0]:makePage(type==='ledger'?'Account ledger':'Untitled screen');
  if(type==='ledger'){p.nodes=[node('Text','Account ledger',[36,40,380,46]),node('Button','Find account',[690,40,225,46]),createItem('Table','Ledger')];Object.assign(p.nodes[0].style,{fontSize:32,weight:700});p.nodes[2].boxes.laptop=[36,124,879,284]}
- change(()=>{if(type==='linked-entry'){const ledger=makePage('Ledger');p.name='Entry';const table=p.nodes.pop();table.boxes.laptop=[36,104,800,420];table.boxes.phone=[20,80,350,490];const title=node('Text','Ledger',[36,28,640,53]);title.style.fontSize=32;title.boxes.phone=[20,18,350,44];ledger.nodes=[title,table];project.pages.push(p,ledger);pageId=p.id;selected=[];pan=[0,0];zoomFactor=1;return}if(type==='signin'){const w=intro().pages[1];p.nodes.at(-1).actions[0].target=w.id;project.pages.push(w)}project.pages.push(p);pageId=p.id;selected=[];pan=[0,0];zoomFactor=1});closeSide();dismiss();if(type==='blank')pageSettings()
+ const preset=projectPresets.find(t=>t.name===project.theme.preset);if(preset)for(const n of p.nodes)styleLayerForTheme(n,preset);
+ change(()=>{if(type==='linked-entry'){const ledger=makePage('Ledger');p.name='Entry';const table=p.nodes.pop();table.boxes.laptop=[36,104,800,420];table.boxes.phone=[20,80,350,490];const title=node('Text','Ledger',[36,28,640,53]);title.style.fontSize=32;title.boxes.phone=[20,18,350,44];if(preset)styleLayerForTheme(title,preset);ledger.nodes=[title,table];project.pages.push(p,ledger);pageId=p.id;selected=[];pan=[0,0];zoomFactor=1;return}if(type==='signin'){const w=intro().pages[1];if(preset)for(const n of w.nodes)styleLayerForTheme(n,preset);p.nodes.at(-1).actions[0].target=w.id;project.pages.push(w)}project.pages.push(p);pageId=p.id;selected=[];pan=[0,0];zoomFactor=1});closeSide();dismiss();if(type==='blank')pageSettings()
 }
 function variantDialog(type,at){
  modal('Insert '+type.toLowerCase(),('<p class="hint">Choose a starting design or add one of your own.</p>')+variants[type].map((v,i)=>'<button class="variant" data-variant="'+i+'"><span>'+icon(categoryIcon(type))+v+'</span>'+icon('plus',15)+'</button>').join('')+project.templates.filter(t=>t.kind==='element'&&(pickerKind(t.node)?'Picker':t.node.type)===type||t.kind==='block'&&type==='Module'||t.kind==='window'&&type==='Window'||t.kind==='element'&&t.category===type).map(t=>preset('use-'+t.id,t.name,'library')).join('')+btn('type-template','Add a template','plus','addTemplate'));
  $('[data-cmd=type-template]').onclick=()=>templateDialog(null,type==='Button'?'button':'embed',type);
  $$('.dialog [data-variant]').forEach(el=>el.onclick=()=>{const ver=variants[type][+el.dataset.variant];
- if(type==='Window'){let w=makePage(ver,'window',ver==='Wide dialog'?640:440);if(ver!=='Blank window'){w.nodes=[node('Text','Window title',[24,38,330,40]),node('Button','Close',[24,157,145,44],{actions:[{event:'click',action:'close',target:''}]})];w.nodes[0].style.fontSize=27}change(()=>{project.pages.push(w);pageId=w.id;selected=[]});dismiss();closeSide();pageSettings();return}
+ if(type==='Window'){let w=makePage(ver,'window',ver==='Wide dialog'?640:440);if(ver!=='Blank window'){w.nodes=[node('Text','Window title',[24,38,330,40]),node('Button','Close',[24,157,145,44],{actions:[{event:'click',action:'close',target:''}]})];w.nodes[0].style.fontSize=27}const preset=projectPresets.find(t=>t.name===project.theme.preset);if(preset)for(const n of w.nodes)styleLayerForTheme(n,preset);change(()=>{project.pages.push(w);pageId=w.id;selected=[]});dismiss();closeSide();pageSettings();return}
  const n=type==='Picker'?createPicker(ver.toLowerCase()):createItem(type,ver);if(type==='Image'&&ver==='Upload image')pickImage(src=>{n.src=src;insertNode(n,at)});else insertNode(n,at)
  })
 }
@@ -280,7 +282,7 @@ function templateDialog(existing=null,initialKind=null,category=null){
  if(category==='Window')n.boxes.laptop=[0,0,460,310];n.name=name;saveTemplate({id:existing?.id||uid(),kind:category==='Window'?'window':'element',category,name,node:n})}catch(e){$('#tplError').textContent=e.message}}
 }
 function useTemplate(t){if(!t)return;if(t.kind==='trigger'){actionDialog(null,t.action);return}
- if(t.kind==='window'&&t.node){const w=makePage(t.name,'window',t.node.boxes.laptop[2]);w.height=t.node.boxes.laptop[3];const content=clone(t.node);content.id=uid();content.boxes.laptop[0]=0;content.boxes.laptop[1]=0;w.nodes=[content];change(()=>{project.pages.push(w);pageId=w.id;selected=[content.id]});dismiss();closeSide();return}if(t.layout){
+ if(t.kind==='window'&&t.node){const w=makePage(t.name,'window',t.node.boxes.laptop[2]);w.height=t.node.boxes.laptop[3];const content=clone(t.node);content.id=uid();content.boxes.laptop[0]=0;content.boxes.laptop[1]=0;w.nodes=[content];const preset=projectPresets.find(t=>t.name===project.theme.preset);if(preset)for(const n of w.nodes)styleLayerForTheme(n,preset);change(()=>{project.pages.push(w);pageId=w.id;selected=[content.id]});dismiss();closeSide();return}if(t.layout){
  const layout=clone(t.layout),maps=new Map(layout.nodes.map(n=>[n.id,uid()])),groups=new Map();
  const newPageId=uid(),groupId=uid();for(const n of layout.nodes){n.id=maps.get(n.id);delete n.sharedComponent;if(n.picker?.footerButton)n.picker.footerButton=maps.get(n.picker.footerButton)||n.picker.footerButton;for(const a of n.actions){if(maps.has(a.source))a.source=maps.get(a.source);if(a.fields)a.fields=a.fields.map(id=>maps.get(id)||id);if(maps.has(a.target))a.target=maps.get(a.target);else if(a.target===layout.id)a.target=newPageId}if(t.kind==='block')n.group=groupId;else if(n.group){if(!groups.has(n.group))groups.set(n.group,uid());n.group=groups.get(n.group)}}
  change(()=>{if(t.kind==='block'){for(const n of layout.nodes){for(const b of Object.values(n.boxes)){b[0]+=12;b[1]+=12}page().nodes.push(n)}selected=layout.nodes.map(n=>n.id)}else{layout.id=newPageId;layout.name=t.name;project.pages.push(layout);pageId=layout.id;selected=[]}});dismiss();closeSide();return}
@@ -343,6 +345,7 @@ function moveLayer(up){const n=sel();if(!n)return;const list=page().nodes,i=list
 function groupNodes(){if(selected.length<2){toast('Select two or more layers first.');return}let id=uid();multi=false;change(()=>page().nodes.filter(n=>selected.includes(n.id)).forEach(n=>{n.group=id;n.groupName='Layer group'}),'Elements grouped')}
 function removeSelection(){if(!selected.length)return;const ids=new Set(selected);change(()=>{page().nodes=page().nodes.filter(n=>!ids.has(n.id));selected=[]})}
 function command(c){
+ if(c==='apply-preset'){useProjectTheme($('#presetChoice').value);return}
  if(c.startsWith('use-'))return useTemplate(project.templates.find(t=>t.id===c.slice(4)));
  const n=sel();
  switch(c){

@@ -2,44 +2,35 @@
 const personalApi='https://uyyihuvjbrbsombzzvqw.supabase.co';
 const studioPublicKey='sb_publishable_VwYzs5ihi9tR_r1wcfCo-w_mboqCHV_';
 let studioSession=null, cloudBusy=false;
-const sessionKey='formstudio.personal.session';
-function restoreSession(){try{const s=JSON.parse(sessionStorage.getItem(sessionKey));if(s?.user?.id&&s.refresh_token)studioSession=s}catch{}}
-function keepSession(s){studioSession=s;try{if(s)sessionStorage.setItem(sessionKey,JSON.stringify(s));else sessionStorage.removeItem(sessionKey)}catch{}}
-async function api(path,method='GET',body=null,token=null,prefer=null){
- const headers={apikey:studioPublicKey,'Content-Type':'application/json'};
- if(token)headers.Authorization='Bearer '+token;if(prefer)headers.Prefer=prefer;
- const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),25000);
- let res,text;
+const sessionKey='formstudio.owner.session.v2';
+function restoreSession(){
+ try{sessionStorage.removeItem('formstudio.personal.session');const s=JSON.parse(sessionStorage.getItem(sessionKey));if(s?.user?.id && s.access_token && s.expires_at*1000>Date.now())studioSession=s}catch{}
+}
+function keepSession(s){
+ studioSession=s;
+ try{if(s)sessionStorage.setItem(sessionKey,JSON.stringify(s));else sessionStorage.removeItem(sessionKey)}catch{}
+}
+async function studioRequest(op,args={},token=null){
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),25000);
+ let res,data;
  try{
-   res=await fetch(personalApi+path,{method,headers,body:body===null?undefined:JSON.stringify(body),cache:'no-store',referrerPolicy:'no-referrer',signal:controller.signal});
-   text=await res.text();
- }catch{throw Object.assign(Error('Could not reach Supabase. Check your connection.'),{retryable:true})}
- finally{clearTimeout(timeout)}
- let data;try{data=text?JSON.parse(text):null}catch{throw Object.assign(Error('Supabase returned an unreadable response.'),{retryable:res.status>=500||res.ok})}
- if(!res.ok){
-   const err=Error(data?.msg||data?.message||data?.error_description||'Supabase request failed ('+res.status+').');
-   Object.assign(err,{status:res.status,code:data?.error_code,retryable:[408,429].includes(res.status)||res.status>=500});throw err;
+   res=await fetch(personalApi+'/rest/v1/rpc/form_studio_access',{method:'POST',
+     headers:{apikey:studioPublicKey,'Content-Type':'application/json'},credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer',
+     signal:controller.signal,body:JSON.stringify({op,args:token?{...args,token}:args})});
+   data=await res.json();
+ }catch{throw Object.assign(Error('Could not reach Form Studio. Check your connection and try again.'),{retryable:true})}
+ finally{clearTimeout(timer)}
+ if(!res.ok||data?.error){
+   const status=data?.status||res.status;
+   if(status===401 && token && token===studioSession?.access_token)keepSession(null);
+   throw Object.assign(Error(data?.error||'Studio service returned '+status+'.'),{status,retryable:status>=500||status===429});
  }
- return data
+ return data;
 }
-let refreshInFlight=null;
 async function session(){
- if(!studioSession)throw Error('Sign in to your Personal Ledger Supabase account first.');
- const current=studioSession;
- if((current.expires_at||0)*1000>=Date.now()+45000)return current;
- if(refreshInFlight?.current===current)return refreshInFlight.promise;
- const promise=api('/auth/v1/token?grant_type=refresh_token','POST',{refresh_token:current.refresh_token}).then(next=>{
-   if(studioSession!==current)throw Error('The signed-in account changed. Try again.');
-   keepSession(next);return next;
- }).catch(error=>{
-   if(studioSession===current&&['refresh_token_not_found','refresh_token_already_used','session_not_found','session_expired'].includes(error.code)){
-     keepSession(null);throw Error('Sign in again to sync. Your edits are saved on this device.');
-   }
-   throw error;
- }).finally(()=>{if(refreshInFlight?.current===current)refreshInFlight=null});
- refreshInFlight={current,promise};return promise;
+ if(!studioSession||studioSession.expires_at*1000<=Date.now()){keepSession(null);throw Error('Sign in to Form Studio again to use cloud storage.')}
+ return studioSession;
 }
-const projectsApi='/rest/v1/form_studio_projects';
 function cloudBase(owner,id){
  const key='formstudio.cloud.base.'+owner+'.'+id;
  return JSON.parse(localStorage.getItem(key)) || {revision:id===legacyFileId?localStorage.getItem('formstudio.cloud.revision.'+owner):null};
@@ -74,12 +65,12 @@ function cloudDialog() {
    queueCloud();
  };
  $('[data-cmd=cloud-save]').onclick=()=>cloudTask(saveCloud);
- $('[data-cmd=sign-out]').onclick=()=>cloudTask(async()=>{try{await api('/auth/v1/logout?scope=local','POST',null,studioSession.access_token)}finally{keepSession(null);location.reload()}});
+ $('[data-cmd=sign-out]').onclick=siteLogout;
  const list=$('#cloudList'), note=$('#cloudNote');
  if(!navigator.onLine){note.textContent='Offline. You can keep editing on this device or queue a cloud save for when you reconnect.';return}
  (async()=>{
    const s=await session(), rows=[];let batch;
-   do {batch=await api(projectsApi+'?owner_id=eq.'+s.user.id+'&select=project_id,title&order=title,project_id&limit=100&offset='+rows.length,'GET',null,s.access_token);rows.push(...batch)} while(batch.length===100);
+   do {batch=await studioRequest('projects',{offset:rows.length},s.access_token);rows.push(...batch)} while(batch.length===100);
    if(!list.isConnected)return;
    list.innerHTML=rows.filter(r=>isFileId(r.project_id)).map(r=>'<button class="fileRow" data-cloud-id="'+r.project_id+'"><span>'+esc(r.title)+'</span><small>Open</small></button>').join('');
    note.textContent=rows.length?'':'No cloud projects yet. Save the current project to see it here.';
@@ -143,7 +134,7 @@ async function transferProject(row,s){
  // An interrupted request can have reached Postgres before the browser received its reply.
  // The device revision identifies that exact snapshot across retries and browser restarts.
  if(base.attempt){
-   const found=await api(projectsApi+'?owner_id=eq.'+owner+'&project_id=eq.'+id+'&select=revision','GET',null,s.access_token);
+   const found=await studioRequest('revision',{id},s.access_token);
    const revision=found[0]?.revision||null;
    if(revision===base.attempt){
      base={...base,revision,deviceRevision:revision,attempt:null};saveCloudBase(owner,id,base);
@@ -156,21 +147,15 @@ async function transferProject(row,s){
  if(base.deviceRevision===row.revision){if(base.requested||base.attempt)markCloud(owner,id,base.revision,row.revision);return}
  const revision=row.revision,body={revision,document:row.document};
  saveCloudBase(owner,id,{...base,attempt:revision});
- if(base.revision){
-   const filter='?owner_id=eq.'+owner+'&project_id=eq.'+id+'&revision=eq.'+base.revision+'&select=revision';
-   const updated=await api(projectsApi+filter,'PATCH',body,s.access_token,'return=representation');
-   if(!updated.length)conflict();
- }else{
-   try{await api(projectsApi,'POST',{...body,owner_id:owner,project_id:id},s.access_token,'return=minimal')}
-   catch(e){if(e.status===409)conflict();throw e}
- }
+ try{await studioRequest('save',{id,...body,expected:base.revision||null},s.access_token)}
+ catch(e){if(e.status===409)conflict();throw e}
  markCloud(owner,id,revision,row.revision);return 'Project saved to your personal cloud';
 }
 async function openCloud(id){
  if(!isFileId(id)||!write())return;
  const originFile=activeFileId,dialog=$('.dialog');await uploadFinished;
  const s=await session(),owner=s.user.id;
- const rows=await api(projectsApi+'?owner_id=eq.'+owner+'&project_id=eq.'+id+'&select=revision,document','GET',null,s.access_token);
+ const rows=await studioRequest('project',{id},s.access_token);
  if(studioSession?.user.id!==owner||activeFileId!==originFile||!dialog?.isConnected)return;
  if(!rows.length)throw Error('This cloud project is unavailable.');
  const remote=rows[0],doc=validateImport(remote.document),local=deviceRecord(id);
@@ -228,6 +213,6 @@ window.addEventListener('offline',()=>{if(document.getElementById('stage')&&stud
 async function siteLogout(){
  const token=studioSession?.access_token;
  keepSession(null);
- if(token)api('/auth/v1/logout?scope=local','POST',null,token).catch(()=>{});
+ if(token && navigator.onLine)await studioRequest('logout',{},token).catch(()=>{});
  location.reload();
 }

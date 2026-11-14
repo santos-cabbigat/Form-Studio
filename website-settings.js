@@ -1,7 +1,7 @@
 'use strict';
 (async function websiteSettings(){
  const el=id=>document.getElementById(id);
- const enabledKey='formstudio.allowOfflineUnlock', verifier='formstudio.owner.offline.v1';
+ const enabledKey='formstudio.allowOfflineUnlock', verifier='formstudio.owner.offline.v2';
  const remember='formstudio.rememberEmail';
  el('identity').textContent=studioSession?.user.email||'Unlocked offline on this device';
  el('rememberEmail').checked=localStorage.getItem(remember)==='yes';
@@ -18,7 +18,7 @@
  el('signOutAccount').onclick=siteLogout;
  el('checkCloud').onclick=async e=>{
    const button=e.currentTarget;button.disabled=true;
-   try{const s=await session();const result=await api(projectsApi+'?select=project_id&limit=1','GET',null,s.access_token);if(!Array.isArray(result))throw Error('Unexpected response');el('cloudResult').textContent='Connected. Your account can read its cloud project list.'}
+   try{const s=await session();const result=await studioRequest('projects',{},s.access_token);if(!Array.isArray(result))throw Error('Unexpected response');el('cloudResult').textContent='Connected. Your account can read its cloud project list.'}
    catch(err){el('cloudResult').textContent=err.message}finally{button.disabled=false}
  };
  async function inspectInstall(){

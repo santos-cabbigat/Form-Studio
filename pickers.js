@@ -30,7 +30,7 @@ function pickerLabel(n,value){
 }
 function pickerOptionsEditor(n){
   const rows=dropdownChoices(n);
-  return '<fieldset class="choiceEditor"><legend>Dropdown choices</legend>'+rows.map((o,i)=>'<div class="choiceRow"><label>Display label<input data-choice-label="'+i+'" value="'+esc(o.label)+'"></label><label>Stored value<input data-choice-value="'+i+'" value="'+esc(o.value)+'"></label><button data-choice-remove="'+i+'" aria-label="Remove option '+(i+1)+'">×</button></div>').join('')+btn('add-choice','Add option','plus','chip')+'</fieldset>';
+  return '<fieldset class="choiceEditor"><legend>Dropdown choices</legend>'+rows.map((o,i)=>'<div class="choiceRow"><label>Display label<input data-choice-label="'+i+'" value="'+esc(o.label)+'"></label><label>Stored value<input data-choice-value="'+i+'" value="'+esc(o.value)+'"></label><button data-choice-remove="'+i+'" aria-label="Remove option '+(i+1)+'">Remove</button></div>').join('')+btn('add-choice','Add option','plus','chip')+'</fieldset>';
 }
 function pickerInspector(n){
   const kind=pickerKind(n),s=n.picker||{},list=['dropdown','account'].includes(kind);
@@ -68,7 +68,7 @@ function pickerController(getValue,setValue,accent,extraButton) {
     const header=document.createElement('header'),body=document.createElement('div'),footer=document.createElement('footer');
     dialog.replaceChildren(header,body,footer);
     if(kind==='account'||kind==='dropdown'){
-      const title=document.createElement('strong');title.textContent=model.name;header.append(title,button('×','Close picker',close));
+      const title=document.createElement('strong');title.textContent=model.name;header.append(title,button('Close','Close picker',close));
       const find=document.createElement('input');find.type='search';find.placeholder='Search options';find.setAttribute('aria-label','Search options');
       const list=document.createElement('div');list.className='pkList';body.append(find,list);
       function filter(){const q=find.value.trim().toLowerCase(),items=dropdownChoices(model).filter(o=>(o.label+' '+o.value).toLowerCase().includes(q));
@@ -78,7 +78,7 @@ function pickerController(getValue,setValue,accent,extraButton) {
       const decade=year-year%12,offset=view==='days'?1:view==='months'?12:144;
       function move(step){cursor=new Date(year,month+step*offset,1,12);render()}
       const title=view==='days'?cursor.toLocaleString('en',{month:'long',year:'numeric'}):view==='months'?String(year):decade+' – '+(decade+11);
-      header.append(button('‹','Previous '+(view==='days'?'month':view==='months'?'year':'years'),()=>move(-1)),button(title,title,()=>{if(view==='days')view='months';else if(view==='months')view='years';render()}),button('›','Next '+(view==='days'?'month':view==='months'?'year':'years'),()=>move(1)));
+      header.append(button('Previous','Previous '+(view==='days'?'month':view==='months'?'year':'years'),()=>move(-1)),button(title,title,()=>{if(view==='days')view='months';else if(view==='months')view='years';render()}),button('Next','Next '+(view==='days'?'month':view==='months'?'year':'years'),()=>move(1)));
       body.className='pkGrid';body.style.gridTemplateColumns='repeat('+(view==='days'?7:3)+',1fr)';
       if(view==='days'){
         for(const s of ['Su','Mo','Tu','We','Th','Fr','Sa']){const el=document.createElement('small');el.textContent=s;body.append(el)}

@@ -1,7 +1,7 @@
 'use strict';
 
 // Bump with each editor shell release. Old tabs finish using their original bundle.
-const SHELL_VERSION = 'authsplit1';
+const SHELL_VERSION = 'studioaccess2';
 const scope = new URL(self.registration.scope);
 const indexURL = new URL('index.html', scope).href;
 const cachePrefix = 'form-studio-shell:' + scope.href + ':';
@@ -17,7 +17,7 @@ function editorAsset(url) {
 function shellAssets(html) {
   // The published index is static. Preserve query strings so scripts and styles use
   // the same release as the document. The color sampler is the only lazy dependency.
-  const urls = new Set([lazyAsset,new URL('settings.html',scope).href,new URL('website-settings.js?v=authsplit1',scope).href]);
+  const urls = new Set([lazyAsset,new URL('Form-Studio-Handbook.pdf',scope).href,new URL('settings.html',scope).href,new URL('website-settings.js?v=studioaccess2',scope).href]);
   for (const [tag] of html.matchAll(/<(?:script|link)\b[^>]*>/gi)) {
     const script = /^<script\b/i.test(tag);
     if (!script && !/\brel\s*=\s*["']stylesheet["']/i.test(tag)) continue;
@@ -85,8 +85,8 @@ self.addEventListener('fetch', event => {
   if(request.mode==='navigate' && url.pathname===new URL('settings.html',scope).pathname){
     event.respondWith(fetch(request).catch(async()=>{const cache=await caches.open(cacheName);return await cache.match(new URL('settings.html',scope).href)||Response.error()}));return;
   }
-  if (accountPage){event.respondWith(fetch(request).catch(async()=>{const cache=await caches.open(cacheName);return await cache.match(indexURL)||Response.error()}));return}
-  if (!landing && !editorAsset(url)) return;
+  if (accountPage || landing){event.respondWith(fetch(request).catch(async()=>{const cache=await caches.open(cacheName);return await cache.match(indexURL)||Response.error()}));return}
+  if (!editorAsset(url) && url.href!==new URL('Form-Studio-Handbook.pdf',scope).href) return;
   event.respondWith((async () => {
     const cache = await caches.open(cacheName);
     return (await cache.match(landing ? indexURL : request)) || fetch(request);

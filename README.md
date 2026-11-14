@@ -4,6 +4,8 @@
 
 Design screens for phones, tablets, and laptops. Insert shapes, text, inputs, tables, reusable components, and windows. Preview triggers and export a standalone HTML site or an editable project JSON.
 
+[Download the illustrated user handbook](Form-Studio-Handbook.pdf). First-time owners use **Set up Studio password** with their privately supplied one-time code. Save the recovery code displayed after setup.
+
 ## Bring in a design from HTML and CSS
 
 Choose **Insert → Import editable HTML**, paste a section or open an HTML file, then choose **Check layers**. Include the CSS in a style tag or under **Additional CSS**. Choose **Current screen** to append the section below existing content or **New screen** to start a separate design. **Add layers** creates individual Studio objects. Drag a button, resize a table, or change its label and inspect the generated code. Undo removes the import in one step.
@@ -28,7 +30,7 @@ Open **Files → New project** for a separate design. Applied edits autosave in 
 
 Unapplied Code drafts also save in this browser. To recover one, return to the same project, screen, layout, and selection and open **Code**. Choose **Apply code** to include that change in the design, cloud copy, and export.
 
-For a second copy, open **Files → Sign in / Create account**, then **Save current project to cloud** for each project you want in your personal Supabase. Linked projects upload subsequent edits when the editor is open, online, and signed in with automatic saves enabled. Turn off automatic saves to upload only the versions you choose. An offline or interrupted upload stays pending. If your sign-in has expired or you closed the tab, sign in again to resume your pending saves. **Saved on this device and in cloud** confirms that the current local revision has reached the cloud. On another device, sign in and select the project under **My cloud projects**.
+For a second copy, open **Files → Open cloud projects**, then **Save current project to cloud** for each project you want in your personal Supabase. Linked projects upload subsequent edits when the editor is open, online, and signed in with automatic saves enabled. Turn off automatic saves to upload only the versions you choose. An offline or interrupted upload stays pending. If your sign-in has expired or you closed the tab, sign in again to resume your pending saves. **Saved on this device and in cloud** confirms that the current local revision has reached the cloud. On another device, sign in and select the project under **My cloud projects**.
 
 ## Preview a data-entry flow
 
@@ -46,6 +48,6 @@ Choose a component or group and use **Inspector → Place linked copy** to share
 
 **Files → Project code** shows each screen or window, its groups and components, and shared project files. Use **Add code block** for an embedded component such as a sidebar. Editing a layer in the inspector updates its source. In the multi-file export, screen files assemble the component files, shared runtime code follows trigger connections, and navigation is generated for every screen. Choose **Export → Project source · ZIP**, extract the whole ZIP into one folder, then double-click `index.html`. Keep its accompanying files in that folder. Resize the browser window to preview the laptop, tablet, and phone layouts. **Export → Working website · HTML** gives you a single file that opens offline. To continue visually editing, open the ZIP’s `design.studio.json` with **Files → Import JSON**.
 
-GitHub Pages serves the editor from the repository root. The personal database setup is in `supabase/form-studio.sql` and `supabase/form-studio-projects.sql`, in that order.
+GitHub Pages serves the editor from the repository root. The personal database setup is in `supabase/form-studio.sql` and `supabase/form-studio-projects.sql`, in that order, followed by `supabase/form-studio-access.sql`. The website uses a dedicated Studio password and an opaque session limited to Studio project operations.
 
 When publishing changes to the offline editor files, give `SHELL_VERSION` in `sw.js` a new value in the same release. Existing tabs finish using their cached version. A new version takes over after its files have downloaded and the previous editor tabs close.

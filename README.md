@@ -4,6 +4,12 @@
 
 Design screens for phones, tablets, and laptops. Insert shapes, text, inputs, tables, reusable components, and windows. Preview triggers and export a standalone HTML site or an editable project JSON.
 
+## Bring in a design from HTML and CSS
+
+Choose **Insert → Import editable HTML**, paste a section or open an HTML file, then choose **Check layers**. Include the CSS in a style tag or under **Additional CSS**. Choose **Current screen** to append the section below existing content or **New screen** to start a separate design. **Add layers** creates individual Studio objects. Drag a button, resize a table, or change its label and inspect the generated code. Undo removes the import in one step.
+
+The import measures the laptop, tablet and phone layouts using the project widths. Positions and dimensions remain editable per device. Supported appearance is shared across layouts. The conversion captures static content; scripts, external stylesheets, database connections, and accounting logic need their own integration. For a React or other framework app, supply the rendered screen HTML and its CSS. For a Form Studio project, import its editable JSON to recover its existing triggers and templates.
+
 ## Edit a layered component
 
 Open **Layers → Select multiple** and select each layer, including layers hidden behind another shape. You can also use the canvas multi-select tool or Shift-click. Choose **Group**. Tap one member to select the group, then open **Inspector → Code → Copy for ChatGPT**. The copy contains all member layers and triggers together. Paste the complete returned block over the selection and choose **Apply code**. Undo restores the prior state. To edit a complete window, select it in the screen menu, then open Code. Positions and sizes in a snippet use the current device layout.

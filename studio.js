@@ -56,7 +56,7 @@ function markCanvasLayer(id,on){
 function drawBoard(){
  const s=$('#sheet'),pg=page(),[w,h]=bounds(pg,device,project);
  if(latestBoard!==pg){s.replaceChildren();canvasLayers.clear();latestBoard=pg}
- s.style.width=w+'px';s.style.height=h+'px';s.style.background=project.theme.background;s.style.fontFamily=project.theme.font;s.style.setProperty('--accent',project.theme.accent);
+ s.style.width=w+'px';s.style.height=h+'px';s.style.backgroundColor=pg.backgrounds?.[device]||project.theme.background;s.style.fontFamily=project.theme.font;s.style.setProperty('--accent',project.theme.accent);
  const visible=new Set(),chosen=new Set(selected);
  let next=s.firstElementChild;
  for(const n of pg.nodes){
@@ -94,6 +94,7 @@ function drawLibrary(){
  const match=t=>t.toLowerCase().includes(search.toLowerCase());
  pane='<div class="libTop"><h2>Component library</h2><label class="search">'+icon('search',14)+'<input id="search" placeholder="Find a component" aria-label="Find a component" value="'+esc(search)+'"><kbd>/</kbd></label></div>';
  const cards=types.filter(match);pane+=section('Elements',cards.length?'<div class="cardGrid">'+cards.map(t=>'<button class="component" data-insert="'+t+'" draggable="true">'+icon(categoryIcon(t),19)+'<span>'+t+'</span></button>').join('')+'</div>':'<span class="hint">No matching elements.</span>');
+ if(match('Import editable HTML and CSS'))pane+=preset('import-html','Import editable HTML','code');
  pane+=section('Screen templates',[['signin','Sign-in screen','page',''],['ledger','Account ledger','table','mint'],['sample-entry','Sample entry form','input','mint'],['linked-entry','Entry & ledger tabs','table','mint'],['picker-demo','Picker with buttons','picker','mint'],['blank','Blank screen','insert','sand']].filter(a=>match(a[1])).map(a=>preset(...a)).join(''));
  pane+=section('My templates',templateRows(search)+btn('new-template','Add template','plus','addTemplate'));
  }else if(tab==='Layers'){
@@ -220,6 +221,10 @@ function saveSelected(existing=null){
 function templateDialog(existing=null,initialKind=null,category=null){
  const h=existing?.node?.html||'<style>\n  .action {\n    background: #7545d6;\n    color: white;\n    border: 0;\n    border-radius: 18px;\n    padding: 12px 24px;\n  }\n</style>\n<button class="action">Continue</button>';
  modal(existing?'Edit template':'Add to My templates',field('Template name','<input id="tplName" placeholder="e.g. Rounded action button" value="'+esc(existing?.name||'')+'">')+field('Template type','<select id="tplKind">'+options([['button','Editable button'],['embed','Embedded HTML'],['trigger','Trigger']],existing?'embed':initialKind||'button')+'</select>')+field('Library category','<select id="tplCategory">'+options(types,existing?.category||category||'Button')+'</select>')+field('Paste HTML and CSS','<textarea rows="10" id="tplCode" spellcheck="false">'+esc(h)+'</textarea>')+'<p class="hint" id="tplHint">Editable buttons support a single button with CSS. Embedded HTML keeps complex markup and inline scripts in a separate frame.</p><div id="tplError" class="error"></div><div class="dialogActions">'+btn('commit-paste','Save template','check','btn primary')+'</div>',true);
+ if(!existing){
+   const convert=document.createElement('button');convert.className='chip';convert.textContent='Import as separate layers';convert.type='button';
+   $('#tplHint').after(convert);convert.onclick=()=>importHTMLDialog($('#tplCode').value,$('#tplName').value);
+ }
  $('#tplKind').onchange=()=>{if($('#tplKind').value==='trigger')triggerTemplate()};
  $('[data-cmd=commit-paste]').onclick=()=>{try{const name=requiredName(),category=$('#tplCategory').value,code=$('#tplCode').value.trim();if(!code)throw Error('Paste some code first.');let n;
  if($('#tplKind').value==='button'){const doc=new DOMParser().parseFromString(code,'text/html');const el=doc.querySelector('button');if(!el||el.children.length||doc.querySelector('script,link,iframe')||el.getAttributeNames().some(k=>/^on/i.test(k)))throw Error('Choose Embedded HTML for a multi-element or scripted template.');
@@ -272,6 +277,8 @@ function exportDialog(){
 function validateImport(p){
  if(p?.format!=='form-studio'||p.version!==1||!Array.isArray(p.pages)||!p.pages.some(a=>a.kind==='screen')||!Array.isArray(p.templates)||!Array.isArray(p.palette)||!p.theme||typeof p.name!=='string'||!p.name.trim())throw Error('Choose a Form Studio project JSON file.');
  const hex=c=>/^#[a-f0-9]{6}$/i.test(c), id=x=>typeof x==='string'&&/^[a-z][a-z0-9_-]*$/i.test(x);
+ const validPaint=color=>typeof color==='string'&&(/^(?:#[a-f0-9]{3,8}|transparent)$/i.test(color)||/^rgba?\([\d.,% /+-]+\)$/i.test(color));
+ if(p.pages.some(pg=>pg?.backgrounds&&(typeof pg.backgrounds!=='object'||Object.entries(pg.backgrounds).some(([d,color])=>!Object.hasOwn(devices,d)||!validPaint(color)))))throw Error('A screen background is invalid.');
  if(p.pages.some(pg=>!pg||pg.devNote!==undefined&&typeof pg.devNote!=='string'))throw Error('Screen notes must be text.');
  if(!p.palette.every(hex)||!hex(p.theme.accent)||!hex(p.theme.background)||!families.includes(p.theme.font)||Object.keys(devices).some(d=>!sizes[d].includes(p.widths?.[d])))throw Error('Project theme or device settings are invalid.');
  const checkNode=n=>{if(!n||!id(n.id)||!['Button','Text','Input','Image','Module','Shape','Table','Custom'].includes(n.type)||typeof n.name!=='string'||!n.style||!n.boxes?.laptop||!Array.isArray(n.actions)||Object.values(n.boxes).some(b=>!Array.isArray(b)||b.length!==4||b.some(v=>!Number.isFinite(v)))||n.style.radius<0||!Number.isFinite(n.style.radius)||!Number.isFinite(n.style.fontSize))throw Error('A component in the project is invalid.');
@@ -305,7 +312,7 @@ function command(c){
  case 'forward':moveLayer(true);break;case 'back':moveLayer(false);break;case 'delete':removeSelection();break;
  case 'add-color':{const color=$('#newColor').value.toUpperCase();if(!project.palette.includes(color))change(()=>project.palette.push(color),'Color saved');break}
  case 'html':case 'json':{const base=project.name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'studio-project';if(c==='html')download(buildHTML(project,exportScreen(project,pageId).id),base+'.html','text/html');else download(JSON.stringify(project,null,2),base+'.studio.json','application/json');toast('Export downloaded');break}
- case 'import':importFile();break
+ case 'import-html':importHTMLDialog();break;case 'import':importFile();break
  }
 }
 document.addEventListener('click',e=>{

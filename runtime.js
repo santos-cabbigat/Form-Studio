@@ -124,7 +124,7 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
  function device(){return forcedDevice||(window.innerWidth<600?'phone':window.innerWidth<1040?'tablet':'laptop')}
  function paint(page,target,available){
  const d=device(),[w,h]=bounds(page,d,p);const zoom=Math.min(1,available/w);
- const board=document.createElement('section');board.className='board';board.dataset.pageId=page.id;board.style.cssText='width:'+w+'px;height:'+h+'px;transform:scale('+zoom+');';board.style.background=p.theme.background;
+ const board=document.createElement('section');board.className='board';board.dataset.pageId=page.id;board.style.cssText='width:'+w+'px;height:'+h+'px;transform:scale('+zoom+');';board.style.backgroundColor=page.backgrounds?.[d]||p.theme.background;
  const outer=document.createElement('div');outer.className='sized';outer.style.width=w*zoom+'px';outer.style.height=h*zoom+'px';outer.append(board);target.replaceChildren(outer);
  page.nodes.filter(n=>!n.hide?.[d]).forEach(n=>{
  let el=makeEl(n,boxFor(n,d,p,page));board.append(el);if(hidden.has(n.id))el.style.visibility='hidden';

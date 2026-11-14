@@ -44,7 +44,7 @@ begin
      return jsonb_build_object('error','Check your credentials. Setup codes also expire.'); end if;
    if op in ('setup','recover') then
      pwd:=args->>'password';
-     if pwd is null or length(pwd)<12 or octet_length(pwd)>72 then return jsonb_build_object('error','Use 12 or more characters, up to 72 UTF-8 bytes.'); end if;
+     if pwd is null or length(pwd)<8 or octet_length(pwd)>72 then return jsonb_build_object('error','Use 8 or more characters, up to 72 UTF-8 bytes.'); end if;
      recovery:=encode(extensions.gen_random_bytes(20),'hex');
      update studio_private.owner_access set password_hash=extensions.crypt(pwd,extensions.gen_salt('bf',12)), setup_hash=null,setup_until=null,
        recovery_hash=extensions.digest(recovery,'sha256') where owner_id=account.owner_id;

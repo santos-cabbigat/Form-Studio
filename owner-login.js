@@ -16,9 +16,9 @@
    codeLabel.hidden=repeat.hidden=!create;fields.code.required=fields.confirm.required=create;
    codeLabel.firstChild.textContent=setup?'One-time setup code':'Private recovery code';
    document.getElementById('pwdLabel').textContent=create?'New Studio password':'Studio password';
-   fields.password.autocomplete=create?'new-password':'current-password';fields.password.minLength=create?12:1;
+   fields.password.autocomplete=create?'new-password':'current-password';fields.password.minLength=create?8:1;
    submit.textContent=create?(setup?'Create Studio password':'Reset Studio password'):'Sign in';
-   document.getElementById('authHint').textContent=create?'Enter the private code and choose a Studio password with at least 12 characters.':'Use your Form Studio password. First visit? Choose Set up Studio password.';
+   document.getElementById('authHint').textContent=create?'Enter the private code and choose a Studio password with at least 8 characters.':'Use your Form Studio password. First visit? Choose Set up Studio password.';
    for(const b of modeButtons)b.hidden=b.dataset.auth===next;
  }
  for(const b of modeButtons)b.onclick=()=>choose(b.dataset.auth);

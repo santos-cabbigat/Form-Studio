@@ -19,7 +19,7 @@ function change(fn,msg){remember();preserveColumnLinks(project);const before=lin
 function clean(){if(!project.pages.some(p=>p.id===pageId))pageId=project.pages[0].id;selected=selected.filter(id=>page().nodes.some(n=>n.id===id))}
 function history(back){const from=back?past:future,to=back?future:past;if(!from.length)return;to.push(JSON.stringify(project));project=JSON.parse(from.pop());clean();write();render()}
 function dismiss(){ $('#overlay').replaceChildren() }
-function modal(title,body,wide=false){$('#overlay').innerHTML='<div class="dialogBg"><section class="dialog '+(wide?'wide':'')+'" role="dialog" aria-modal="true" aria-label="'+esc(title)+'"><header class="dialogHead"><h2>'+esc(title)+'</h2>'+btn('dismiss','', 'close','')+'</header>'+body+'</section></div>';let first=$('.dialog input,.dialog select,.dialog textarea');if(first)first.focus()}
+function modal(title,body,wide=false){$('#overlay').innerHTML='<div class="dialogBg"><section class="dialog '+(wide?'wide':'')+'" role="dialog" aria-modal="true" aria-label="'+esc(title)+'"><header class="dialogHead"><h2>'+esc(title)+'</h2>'+btn('dismiss','', 'close','')+'</header>'+body+'</section></div>';let first=$('.dialog input,.dialog select,.dialog textarea');if(first&&!first.readOnly&&first.tagName!=='TEXTAREA')first.focus()}
 function closeSide(){for(const s of ['.library','.inspector'])$(s).classList.remove('shown')}
 function choosePage(id){endReferencePick();closeSide();panMode=false;pageId=id;selected=[];multi=false;zoomFactor=1;pan=[0,0];dismiss();render()}
 function selectIds(ids){
@@ -116,7 +116,7 @@ function drawLibrary(){
  if(tab==='Insert'){
  const match=t=>t.toLowerCase().includes(search.toLowerCase());
  pane='<div class="libTop"><h2>Component library</h2><label class="search">'+icon('search',14)+'<input id="search" placeholder="Find a component" aria-label="Find a component" value="'+esc(search)+'"><kbd>/</kbd></label></div>';
- const cards=types.filter(match);pane+=section('Elements',cards.length?'<div class="cardGrid">'+cards.map(t=>'<button class="component" data-insert="'+t+'" draggable="true">'+icon(categoryIcon(t),19)+'<span>'+t+'</span></button>').join('')+'</div>':'<span class="hint">No matching elements.</span>');
+ const cards=types.filter(match);pane+=section('Elements',cards.length?'<div class="cardGrid">'+cards.map(t=>'<button class="component" data-insert="'+t+'" draggable="true" aria-label="'+t+'" title="'+t+'">'+icon(categoryIcon(t),19)+'<span>'+t+'</span></button>').join('')+'</div>':'<span class="hint">No matching elements.</span>');
  if(match('Import editable HTML and CSS'))pane+=preset('import-html','Import editable HTML','code');
  pane+=section('Screen templates',[['signin','Sign-in screen','page',''],['ledger','Account ledger','table','mint'],['sample-entry','Sample entry form','input','mint'],['linked-entry','Entry & ledger tabs','table','mint'],['picker-demo','Picker with buttons','picker','mint'],['blank','Blank screen','insert','sand']].filter(a=>match(a[1])).map(a=>preset(...a)).join(''));
  pane+=section('My templates',templateRows(search)+btn('new-template','Add template','plus','addTemplate'));
@@ -125,7 +125,7 @@ function drawLibrary(){
  '<div class="row">'+btn('pages','Manage screens','page','btn smallBtn')+btn('find-project','Find in project','search','btn smallBtn')+'</div><div id="layerCommands">'+layerCommands()+'</div><h3 class="mt">Elements</h3>'+btn('multi',multi?'Finish selecting ('+selected.length+')':'Select multiple','group','btn smallBtn')+
  [...page().nodes].reverse().map(n=>'<button data-layer="'+n.id+'" class="layer '+(selected.includes(n.id)?'active':'')+'">'+icon(categoryIcon(n.type),15)+esc(n.name)+(n.locked?' · Locked':'')+(n.hide?.[device]?' · Hidden':'')+(n.group?' '+icon('group',12):'')+'</button>').join('')+'<div class="row">'+btn('group','Group','','btn smallBtn')+btn('ungroup','Ungroup','','btn smallBtn')+'</div><div class="row">'+btn('forward','Bring forward','','btn smallBtn')+btn('back','Send back','','btn smallBtn')+'</div>'+btn('delete','Delete selection','','btn smallBtn')+'</div>'
  }else if(tab==='Triggers'){
- const n=sel();pane='<div class="panel"><h2>Triggers</h2>'+(n?'<h3>'+esc(n.name)+'</h3>'+n.actions.map((a,i)=>'<div class="row"><button class="actLine" data-editaction="'+i+'">'+icon('triggers',14)+esc(actName(a))+'</button><button title="Remove trigger" data-rmaction="'+i+'">×</button></div>').join('')+btn('add-action','Add trigger','plus','btn full'):'<p>Select an element to attach a trigger.</p>')+'<h3 class="mt">My trigger templates</h3>'+templateRows('',true)+btn('new-trigger','New trigger template','plus','addTemplate')+'</div>'
+ const n=sel();pane='<div class="panel"><h2>Triggers</h2>'+(n?'<h3>'+esc(n.name)+'</h3>'+n.actions.map((a,i)=>'<div class="row"><button class="actLine" data-editaction="'+i+'">'+icon('triggers',14)+esc(actName(a))+'</button><button title="Remove trigger" data-rmaction="'+i+'">Delete</button></div>').join('')+btn('add-action','Add trigger','plus','btn full'):'<p>Select an element to attach a trigger.</p>')+'<h3 class="mt">My trigger templates</h3>'+templateRows('',true)+btn('new-trigger','New trigger template','plus','addTemplate')+'</div>'
  }else if(tab==='Palette'){
  pane='<div class="panel"><h2>Color palette</h2><p>Apply a swatch to the selected element’s fill.</p><div class="swatches">'+project.palette.map(c=>'<button class="swatch" data-swatch="'+esc(c)+'" style="background:'+esc(c)+'" title="Apply '+esc(c)+'"></button>').join('')+'</div>'+field('Add a custom color','<input type="color" id="newColor" value="#a28bc2">')+colorPickButton('palette','palette color')+btn('add-color','Save color','plus','btn')+'<h3 class="mt">Palette presets</h3>'+['Studio violet','Coastal green','Warm clay'].map((v,i)=>'<button class="variant" data-palette="'+i+'">'+v+icon('right',13)+'</button>').join('')+'</div>'
  }else{
@@ -141,7 +141,7 @@ function syncCodeSize(expanded){
  if(control){control.textContent=expanded?'Reduce code panel':'Expand code';control.setAttribute('aria-pressed',String(Boolean(expanded)))}
 }
 function drawProps(){
- const n=sel(),head='<div class="insHead"><h2>Inspector</h2>'+icon('sliders',16)+'</div><div style="padding:0 15px 13px"><div class="seg"><button data-mode="design" class="'+(mode==='design'?'active':'')+'">'+icon('sliders',13)+'Design</button><button data-mode="code" class="'+(mode==='code'?'active':'')+'">'+icon('code',13)+'Code</button></div></div>';let body='';
+ const n=sel(),head='<div class="insHead"><h2>Inspector</h2><button id="dockPanel">Dock</button>'+icon('sliders',16)+'</div><div style="padding:0 15px 13px"><div class="seg"><button data-mode="design" class="'+(mode==='design'?'active':'')+'">'+icon('sliders',13)+'Design</button><button data-mode="code" class="'+(mode==='code'?'active':'')+'">'+icon('code',13)+'Code</button></div></div>';let body='';
  if(mode==='code'){body=codePanel()}
  else if(!n){body='<div class="part"><h3>'+esc(page().name)+'</h3><p class="hint">Open Code to copy this entire '+page().kind+', or select a layer.</p>'+btn('page-settings','Screen settings','page')+'</div>'}
  else if(selected.length>1){body=groupPanel()}
@@ -155,7 +155,7 @@ function drawProps(){
  if(mode==='design'&&n)body+=linkedPart();
  if(mode==='design')body+=notesPanel();
  if(mode==='design'&&n)body='<div class="arrangeEntry">'+btn('arrange','Arrange','sliders','btn full')+'</div>'+body;
- $('#inspector').innerHTML=head+body;syncCodeSize($('#inspector').classList.contains('wideCode'));$('#arrangeTool').disabled=!selected.length;const code=$('#elementCode');if(code){code.setSelectionRange(0,code.value.length);code.scrollTop=0}
+ $('#inspector').innerHTML=head+body;syncCodeSize($('#inspector').classList.contains('wideCode'));$('#arrangeTool').disabled=!selected.length;const code=$('#elementCode');if(code){code.scrollTop=0}
 }
 function colorControl(label,k,v){const actual=v==='var(--accent)'?project.theme.accent:/^#[a-f\d]{6}$/i.test(v)?v:'#ffffff';return '<div class="colorRow"><span>'+label+'</span><label class="colorBox"><input type="color" aria-label="'+label+'" data-style="'+k+'" value="'+actual+'">'+esc(v==='var(--accent)'?actual.toUpperCase():v)+'</label>'+colorPickButton(k,label)+'</div>'}
 function sourceFor(n){
@@ -238,11 +238,11 @@ function variantDialog(type,at){
  })
 }
 function pickImage(cb){const inp=document.createElement('input');inp.type='file';inp.accept='image/png,image/jpeg,image/webp,image/gif';inp.onchange=()=>{const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{if(!/^data:image\/(png|jpeg|webp|gif);base64,/i.test(r.result)){toast('Choose a PNG, JPEG, GIF, or WebP image.');return}cb(r.result)};r.readAsDataURL(f)};inp.click()}
-function pagesDialog(){modal('Screens & windows',project.pages.map(p=>'<button class="variant" data-page="'+p.id+'"><span>'+icon(p.kind==='window'?'window':'page')+esc(p.name)+'</span>'+icon(p.id===pageId?'check':'right',14)+'</button>').join('')+'<div class="dialogActions">'+btn('find-project','Find in project','search')+btn('save-screen-template','Save template','library')+btn('page-settings','Edit current')+btn('blank','New screen','plus','btn primary')+'</div>')}
+function pagesDialog(){modal('Screens & windows',project.pages.map(p=>'<div class="pageRow"><button class="variant" data-page="'+p.id+'"><span>'+icon(p.kind==='window'?'window':'page')+esc(pageCaption(p))+'</span>'+icon(p.id===pageId?'check':'right',14)+'</button><button class="btn" data-delete-page="'+p.id+'">Delete</button></div>').join('')+'<div class="dialogActions">'+btn('find-project','Find in project','search')+btn('save-screen-template','Save template','library')+btn('page-settings','Edit current')+btn('blank','New screen','plus','btn primary')+'</div>')}
 function pageSettings(){const p=page();modal(p.kind==='window'?'Window settings':'Screen settings',field('Name','<input id="pgName" value="'+esc(p.name)+'">')+(p.kind==='window'?'<div class="row">'+field('Width (px)','<input id="pgWidth" type="number" min="120" max="2000" value="'+p.width+'">')+field('Height (px)','<input id="pgHeight" type="number" min="100" max="2400" value="'+p.height+'">')+'</div>':'')+'<div class="dialogActions">'+btn('dismiss','Cancel')+btn('save-page','Save','','btn primary')+'</div>')}
 function actionDialog(index=null,sample=null){
  const n=sel();if(!n){toast('Select an element for this trigger.');return}
- const old=sample||n.actions[index]||{};modal('Element trigger',field('Element','<input readonly value="'+esc(n.name)+'">')+triggerForm(old)+'<div id="actionError" class="error"></div><div class="dialogActions">'+btn('store-action','Save as template')+btn('commit-action','Apply trigger','check','btn primary')+'</div>');wireTargets(old);
+ const old=sample||n.actions[index]||{};modal('Element trigger',field('Element','<input readonly value="'+esc(n.name)+'">')+triggerForm(old)+'<div id="actionError" class="error"></div><div class="dialogActions">'+(index===null?'':'<button class="btn" id="deleteThisTrigger">Delete trigger</button>')+btn('store-action','Save as template')+btn('commit-action','Apply trigger','check','btn primary')+'</div>');wireTargets(old);if(index!==null)$('#deleteThisTrigger').onclick=()=>{change(()=>n.actions.splice(index,1));dismiss()};
  $('[data-cmd=commit-action]').onclick=()=>{try{const a=readTrigger();change(()=>{if(index===null)n.actions.push(a);else n.actions[index]=a});dismiss();toast('Trigger applied')}catch(e){$('#actionError').textContent=e.message}};
  $('[data-cmd=store-action]').onclick=()=>{try{triggerTemplate(readTrigger())}catch(e){$('#actionError').textContent=e.message}}
 }
@@ -346,7 +346,8 @@ function command(c){
  if(c.startsWith('use-'))return useTemplate(project.templates.find(t=>t.id===c.slice(4)));
  const n=sel();
  switch(c){
- case 'expand-code':{const panel=$('#inspector');if(innerWidth<=850){$('#library').classList.remove('shown');panel.classList.add('shown')}syncCodeSize(!panel.classList.contains('wideCode'));$('#elementCode')?.focus({preventScroll:true});break}
+ case 'site-logout':siteLogout();break;
+ case 'expand-code':{const panel=$('#inspector');if(innerWidth<=850){$('#library').classList.remove('shown');panel.classList.add('shown')}syncCodeSize(!panel.classList.contains('wideCode'));break}
  case 'merge-design':mergeDialog();break;case 'find-project':findInProject();break;case 'duplicate-layers':case 'lock-layers':case 'hide-layers':layerAction(c);break;
  case 'guides':toggleSmartGuides();break;case 'arrange':arrangeDialog();break;case 'undo':history(true);break;case 'redo':history(false);break;
  case 'preview':preview();break;case 'export':exportDialog();break;case 'dismiss':dismiss();break;
@@ -369,11 +370,12 @@ document.addEventListener('click',e=>{
  if(b.dataset.choiceRemove!==undefined&&sel())editPickerChoice(+b.dataset.choiceRemove,'remove');
  if(b.dataset.sample)pickDesignColor(b.dataset.sample);
  if(b.dataset.tab){tab=b.dataset.tab;render();if(innerWidth<=620||innerWidth<=850&&tab!=='Insert'){closeSide();$('#library').classList.add('shown')}}
- if(b.dataset.mode){mode=b.dataset.mode;drawProps();if(mode==='code')selectCode()}
+ if(b.dataset.mode){mode=b.dataset.mode;drawProps()}
  if(b.dataset.device){device=b.dataset.device;zoomFactor=1;pan=[0,0];render()}
+ if(b.dataset.deletePage)deleteDestination(b.dataset.deletePage);
  if(b.dataset.page)choosePage(b.dataset.page);
  if(b.dataset.insert)variantDialog(b.dataset.insert);
- if(b.dataset.layer){const n=page().nodes.find(v=>v.id===b.dataset.layer);toggleLayers(n,multi||e.shiftKey||e.ctrlKey||e.metaKey);if(mode==='code')selectCode()}
+ if(b.dataset.layer){const n=page().nodes.find(v=>v.id===b.dataset.layer);toggleLayers(n,multi||e.shiftKey||e.ctrlKey||e.metaKey)}
  if(b.dataset.editaction!==undefined)actionDialog(+b.dataset.editaction);
  if(b.dataset.rmaction!==undefined&&sel())change(()=>sel().actions.splice(+b.dataset.rmaction,1));
  if(b.dataset.edittemplate)manageTemplate(project.templates.find(t=>t.id===b.dataset.edittemplate));
@@ -449,3 +451,5 @@ const styleNode=document.createElement('style');styleNode.textContent=nativeCSS;
 if(innerWidth<=620)device='phone';render();if(loadNote){$('#saveStatus').textContent=loadNote;toast(loadNote)}
 
 if(studioSession&&storageOK)try{resumeCloudSaves()}catch{}
+
+bindPanels();

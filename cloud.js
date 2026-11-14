@@ -74,7 +74,7 @@ function cloudDialog() {
    queueCloud();
  };
  $('[data-cmd=cloud-save]').onclick=()=>cloudTask(saveCloud);
- $('[data-cmd=sign-out]').onclick=()=>cloudTask(async()=>{try{await api('/auth/v1/logout?scope=local','POST',null,studioSession.access_token)}finally{keepSession(null);filesDialog()}});
+ $('[data-cmd=sign-out]').onclick=()=>cloudTask(async()=>{try{await api('/auth/v1/logout?scope=local','POST',null,studioSession.access_token)}finally{keepSession(null);location.reload()}});
  const list=$('#cloudList'), note=$('#cloudNote');
  if(!navigator.onLine){note.textContent='Offline. You can keep editing on this device or queue a cloud save for when you reconnect.';return}
  (async()=>{
@@ -235,5 +235,12 @@ function resumeCloudSaves(){
  const ids=new Set([activeFileId,...Object.keys(localStorage).filter(k=>k.startsWith(prefix)).map(k=>k.slice(prefix.length))]);
  for(const id of ids)if(isFileId(id))queueCloud(1300,id);
 }
-window.addEventListener('online',resumeCloudSaves);
-window.addEventListener('offline',()=>{if(studioSession)refreshCloudStatus(studioSession.user.id,activeFileId)});
+window.addEventListener('online',()=>{if(!document.body.classList.contains('locked'))resumeCloudSaves()});
+window.addEventListener('offline',()=>{if(studioSession&&!document.body.classList.contains('locked'))refreshCloudStatus(studioSession.user.id,activeFileId)});
+
+async function siteLogout(){
+ const token=studioSession?.access_token;
+ keepSession(null);
+ if(token)api('/auth/v1/logout?scope=local','POST',null,token).catch(()=>{});
+ location.reload();
+}

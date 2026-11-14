@@ -1,7 +1,7 @@
 'use strict';
 
 // Bump with each editor shell release. Old tabs finish using their original bundle.
-const SHELL_VERSION = 'offline1';
+const SHELL_VERSION = 'panels2';
 const scope = new URL(self.registration.scope);
 const indexURL = new URL('index.html', scope).href;
 const cachePrefix = 'form-studio-shell:' + scope.href + ':';

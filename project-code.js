@@ -121,10 +121,10 @@ function codeBrowser(initial=pageId){
   const fileList=[prefix+'screen.js',...[...files.keys()].filter(path=>path.startsWith(prefix+'components/')),'project.js','shared/runtime.js','logic.js','start.js','index.html'];
   modal('Project code',field('Screen or window','<select id="codePage">'+options(project.pages.map(q=>[q.id,q.name]),pg.id)+'</select>')+field('Code file','<select id="codePath">'+options(fileList.map(path=>[path,path===prefix+'screen.js'?'Screen code':path.replace(prefix,'')]),fileList[0])+'</select>')+field('Selected file','<textarea readonly id="projectSource" rows="9" spellcheck="false"></textarea>')+'<p>Screen and component files connect automatically through the project. Select a layer in the editor to change its code.</p><div class="fileActions">'+btn('open-code-layer','Edit selected code')+btn('add-code-block','Add code block')+btn('source-zip','Download source ZIP','export','btn primary')+'</div>',true);
   const area=$('#projectSource'),file=$('#codePath'),edit=$('[data-cmd=open-code-layer]');
-  function display(){area.value=files.get(file.value);area.select();area.scrollTop=0;edit.disabled=!file.value.startsWith(prefix);}
+  function display(){area.value=files.get(file.value);area.scrollTop=0;edit.disabled=!file.value.startsWith(prefix);}
   file.onchange=display;$('#codePage').onchange=e=>codeBrowser(e.target.value);
   edit.onclick=()=>{
-    const path=file.value;choosePage(pg.id);const nodes=pg.nodes.filter(n=>sourcePath(prefix.slice(0,-1),n)===path);selectIds(nodes.map(n=>n.id));mode='code';drawProps();if(innerWidth<=850)$('#inspector').classList.add('shown');selectCode();
+    const path=file.value;choosePage(pg.id);const nodes=pg.nodes.filter(n=>sourcePath(prefix.slice(0,-1),n)===path);selectIds(nodes.map(n=>n.id));mode='code';drawProps();if(innerWidth<=850)$('#inspector').classList.add('shown');
   };
   $('[data-cmd=add-code-block]').onclick=()=>{
     choosePage(pg.id);modal('Add code block',field('Block name','<input id="blockName" placeholder="e.g. Sidebar">')+field('HTML and CSS','<textarea id="blockHTML" rows="8" spellcheck="false">&lt;aside&gt;Sidebar&lt;/aside&gt;</textarea>')+'<div class="dialogActions">'+btn('commit-code-block','Insert block','','btn primary')+'</div>');

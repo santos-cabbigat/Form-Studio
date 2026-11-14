@@ -44,7 +44,7 @@ function pickerOperations(n){
 }
 function targetChoices(action) {
   if(action==='saveRow')return tablesInProject().map(({pg,n})=>[n.id,pg.name+' / '+n.name]);
-  if(action==='open'||action==='go')return project.pages.filter(p=>p.kind===(action==='open'?'window':'screen')).map(p=>[p.id,p.name]);
+  if(action==='open'||action==='go')return project.pages.filter(p=>p.kind===(action==='open'?'window':'screen')).map(p=>[p.id,pageCaption(p)]);
   if(action==='copyValue'||action==='loadValue')return project.pages.flatMap(pg=>pg.nodes.filter(n=>n.type==='Input'&&n.inputType!=='password').map(n=>[n.id,pg.name+' / '+n.name]));
   if(action==='pickerAction')return inputsOnPage().filter(n=>pickerKind(n)).map(n=>[n.id,n.name]);
   if(action==='passwordDemo')return inputsOnPage(true).filter(n=>n.inputType==='password').map(n=>[n.id,n.name]);

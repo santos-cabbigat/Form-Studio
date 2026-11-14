@@ -8,9 +8,15 @@ Design screens for phones, tablets, and laptops. Insert shapes, text, inputs, ta
 
 Choose **Insert → Import editable HTML**, paste a section or open an HTML file, then choose **Check layers**. Include the CSS in a style tag or under **Additional CSS**. Choose **Current screen** to append the section below existing content or **New screen** to start a separate design. **Add layers** creates individual Studio objects. Drag a button, resize a table, or change its label and inspect the generated code. Undo removes the import in one step.
 
+The importer counts source bytes and elements. A section may have 5,000 lines or more, within 2 MiB of HTML and CSS, 60,000 HTML elements and 8,000 visible layers per layout. A table is a single layer with editable rows. Long screens open at a readable width and scroll vertically.
+
 The import measures the laptop, tablet and phone layouts using the project widths. Positions and dimensions remain editable per device. Supported appearance is shared across layouts. The conversion captures static content; scripts, external stylesheets, database connections, and accounting logic need their own integration. For a React or other framework app, supply the rendered screen HTML and its CSS. For a Form Studio project, import its editable JSON to recover its existing triggers and templates.
 
 ## Edit a layered component
+
+Select a layer and open **Inspector → Code** to edit its HTML and CSS directly. **Expand code** gives the editor more space. For example, change a button’s `font-weight` to `bold` or `color` to `#197344`, then choose **Apply code**. You can also use inline tags such as `<strong>` or `<span style="color: #197344">` inside a button or text label.
+
+To add a new section directly from Code, select the layer it should follow, open Code, paste plain HTML and CSS over the highlighted snippet, and choose **Apply code**. The existing layer and its triggers are preserved. To specify a position among several layers, open the screen’s Code and paste the HTML between their `<template data-layer>` blocks. One Undo reverses the insertion.
 
 Open **Layers → Select multiple** and select each layer, including layers hidden behind another shape. You can also use the canvas multi-select tool or Shift-click. Choose **Group**. Tap one member to select the group, then open **Inspector → Code → Copy for ChatGPT**. The copy contains all member layers and triggers together. Paste the complete returned block over the selection and choose **Apply code**. Undo restores the prior state. To edit a complete window, select it in the screen menu, then open Code. Positions and sizes in a snippet use the current device layout.
 
@@ -32,6 +38,6 @@ Choose a component or group and use **Inspector → Place linked copy** to share
 
 ## Screen and component source
 
-**Files → Project code** shows each screen or window, its groups and components, and shared project files. Use **Add code block** for an embedded component such as a sidebar. Editing a layer in the inspector updates its source. In the multi-file export, screen files assemble the component files, shared runtime code follows trigger connections, and navigation is generated for every screen. Choose **Export → Project source · ZIP**, extract the whole ZIP, and open `index.html`. The standalone HTML export also works offline. Editable JSON includes templates.
+**Files → Project code** shows each screen or window, its groups and components, and shared project files. Use **Add code block** for an embedded component such as a sidebar. Editing a layer in the inspector updates its source. In the multi-file export, screen files assemble the component files, shared runtime code follows trigger connections, and navigation is generated for every screen. Choose **Export → Project source · ZIP**, extract the whole ZIP into one folder, then double-click `index.html`. Keep its accompanying files in that folder. Resize the browser window to preview the laptop, tablet, and phone layouts. **Export → Working website · HTML** gives you a single file that opens offline. To continue visually editing, open the ZIP’s `design.studio.json` with **Files → Import JSON**.
 
 GitHub Pages serves the editor from the repository root. The personal database setup is in `supabase/form-studio.sql` and `supabase/form-studio-projects.sql`, in that order.

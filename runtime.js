@@ -2,8 +2,22 @@ const nativeCSS=`
 *{box-sizing:border-box}.object{position:absolute;margin:0;line-height:1.25;font-family:inherit;overflow:hidden}.object[data-type=Button]{cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0 8px}.object[data-type=Text]{white-space:pre-wrap;display:flex;align-items:center;line-height:1.18;letter-spacing:-.025em}.object[data-type=Input]{padding:0 14px}.object[data-type=Image]{object-fit:cover;display:block}.object[data-type=Table]{padding:0}.object table{width:100%;border-collapse:collapse;font-size:inherit;color:inherit}.object th,.object td{padding:7px 10px;border-bottom:1px solid #dedbe6;text-align:left}.object th{background:#f3effa}.object[data-type=Custom]{border:0}.object[data-type=Button]:focus-visible,.object[tabindex]:focus-visible{outline:3px solid #8763dd}
 `;
 function cssProps(n,b){let s=n.style;return {left:b[0]+'px',top:b[1]+'px',width:b[2]+'px',height:b[3]+'px','background-color':s.fill,color:s.color,'border-radius':s.radius+'px','font-size':s.fontSize+'px','font-weight':String(s.weight),border:s.border,'text-align':s.align,...n.extraCSS}}
-function markup(n,source=false){
- const type=n.type,label=esc(n.text);
+function labelHTML(parts){
+ if(!Array.isArray(parts))throw Error('A formatted label needs text and inline elements.');
+ return parts.map(part=>{
+   if(typeof part==='string')return esc(part);
+   if(!part||!['strong','b','em','i','span','u','s','small','sub','sup','mark','br'].includes(part.tag))throw Error('Use inline text formatting inside this label.');
+   if(part.tag==='br')return '<br>';
+   const css=Object.entries(part.style||{}).map(([key,value])=>{
+     if(!['color','background-color','font-weight','font-style','font-family','font-size','text-decoration-line','text-decoration-color','text-decoration-style','letter-spacing'].includes(key)||typeof value!=='string'||/[;<>{}\\]/.test(value)||!CSS.supports(key,value))throw Error('Unsupported inline text style: '+key);
+     return key+': '+value;
+   }).join('; ');
+   return '<'+part.tag+(css?' style="'+esc(css)+'"':'')+'>'+labelHTML(part.children)+'</'+part.tag+'>';
+ }).join('');
+}
+function markup(n,source=false,rows){
+ const type=n.type,formatted=n.labelParts&&['Button','Text'].includes(type),content=formatted?labelHTML(n.labelParts):esc(n.text);
+ const label=formatted&&!source?'<span>'+content+'</span>':content;
  if(type==='Button')return '<button type="button">'+label+'</button>';
  if(pickerKind(n))return pickerMarkup(n);
  if(type==='Input'){
@@ -12,7 +26,7 @@ function markup(n,source=false){
    return '<input'+attrs+' type="'+(['email','password','number','text'].includes(n.inputType)?n.inputType:'text')+'"'+(n.inputType==='number'?' step="any"':'')+' placeholder="'+label+'" autocomplete="off">';
  }
  if(type==='Image')return '<img alt="'+esc(n.name)+'" src="'+esc(n.src||'')+'">';
- if(type==='Table')return '<div data-start="'+esc(n.initialState||'sample')+'" data-empty="'+esc(n.emptyMessage??'No entries yet.')+'">'+tableMarkup(n,source?tableLines(n).slice(1):seedRows(n))+'</div>';
+ if(type==='Table')return '<div data-start="'+esc(n.initialState||'sample')+'" data-empty="'+esc(n.emptyMessage??'No entries yet.')+'">'+tableMarkup(n,rows??(source?tableLines(n).slice(1):seedRows(n)))+'</div>';
  if(type==='Custom')return '<iframe title="'+esc(n.name)+'" sandbox=""></iframe>';
  return '<div>'+(type==='Text'?label:'')+'</div>'
 }
@@ -20,8 +34,8 @@ function customDoc(n){
  const policy="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'";
  return '<!doctype html><meta http-equiv="Content-Security-Policy" content="'+policy+'"><style>*{box-sizing:border-box}body{margin:0;font:16px Arial,sans-serif}body>:first-child{max-width:100%}</style>'+n.html
 }
-function makeEl(n,b,edit=false){
- const holder=document.createElement('template');holder.innerHTML=markup(n);const el=holder.content.firstElementChild;
+function makeEl(n,b,edit=false,rows){
+ const holder=document.createElement('template');holder.innerHTML=markup(n,false,rows);const el=holder.content.firstElementChild;
  el.className='object';el.dataset.id=n.id;el.dataset.type=n.type;for(const [k,v] of Object.entries(cssProps(n,b)))el.style.setProperty(k,v);
  if(n.type==='Custom'){if(!edit)el.setAttribute('sandbox','allow-scripts');el.srcdoc=customDoc(n)}
  if(n.type==='Text'||n.type==='Button')el.style.justifyContent={left:'flex-start',center:'center',right:'flex-end'}[n.style.align];
@@ -127,8 +141,7 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
  const board=document.createElement('section');board.className='board';board.dataset.pageId=page.id;board.style.cssText='width:'+w+'px;height:'+h+'px;transform:scale('+zoom+');';board.style.backgroundColor=page.backgrounds?.[d]||p.theme.background;
  const outer=document.createElement('div');outer.className='sized';outer.style.width=w*zoom+'px';outer.style.height=h*zoom+'px';outer.append(board);target.replaceChildren(outer);
  page.nodes.filter(n=>!n.hide?.[d]).forEach(n=>{
- let el=makeEl(n,boxFor(n,d,p,page));board.append(el);if(hidden.has(n.id))el.style.visibility='hidden';
- if(n.type==='Table')el.innerHTML=tableMarkup(n,records.get(n.id));
+ let el=makeEl(n,boxFor(n,d,p,page),false,records.get(n.id));board.append(el);if(hidden.has(n.id))el.style.visibility='hidden';
  if(pickerKind(n)){
    put(n,el,values.get(n.id)||'');
    el.addEventListener('click',()=>pickers.open(n,el));
@@ -205,7 +218,7 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
  draw()
 }
 function runtimeCode(){
- const funcs=[esc,cap,boxFor,bounds,cssProps,tableLines,dropdownChoices,tableMarkup,seedRows,columnKeys,mappedFields,pickerKind,pickerFormatOptions,pickerLabel,pickerMarkup,acceptsPickerValue,pickerController,markup,customDoc,makeEl,runtime];
+ const funcs=[esc,cap,boxFor,bounds,cssProps,tableLines,dropdownChoices,tableMarkup,seedRows,columnKeys,mappedFields,pickerKind,pickerFormatOptions,pickerLabel,pickerMarkup,acceptsPickerValue,pickerController,labelHTML,markup,customDoc,makeEl,runtime];
  return 'const devices='+JSON.stringify(devices)+';\n'+funcs.map(f=>'const '+f.name+' = '+f.toString()+';').join('\n');
 }
 function runtimeHead(p){

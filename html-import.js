@@ -18,7 +18,7 @@ async function inspectHTMLDesign(html, width=960){
   const inert=document.createElement('template');
   inert.innerHTML=source.replace(/<(\/?)(html|head|body)(?=[\s/>])/gi,'<$1fs-import-$2');
   const root=inert.content,all=root.querySelectorAll('*');
-  if(all.length>12000)throw Error('This screen contains over 12,000 HTML elements. Import a smaller section.');
+  if(all.length>60000)throw Error('This screen contains over 60,000 HTML elements. Import a smaller section.');
   const title=(root.querySelector('title')?.textContent||'').trim().slice(0,160);
   const allowed=new Set(('a abbr address article aside b bdi bdo blockquote br button caption center cite code col colgroup data datalist dd del details dfn dialog div dl dt em fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 header hgroup hr i img input ins kbd label legend li main mark menu nav ol optgroup option output p picture pre q rp rt ruby s samp section select small span strong sub summary sup table tbody td textarea tfoot th thead time tr u ul var wbr').split(' '));
   const discard=new Set('base canvas embed iframe link math meta noscript object portal script source style svg template title track audio video'.split(' '));
@@ -48,6 +48,16 @@ async function inspectHTMLDesign(html, width=960){
     const doc=frame.contentDocument,view=frame.contentWindow;
     if(!doc?.body)throw Error('The browser could not open the isolated layout preview.');
     const nodes=[],keys=[];
+    // Leave room for input and progress updates while processing a long screen.
+    async function runBatches(iterator){
+      let count=0,deadline=performance.now()+24;
+      for(const step of iterator){
+        if(++count%64===0&&performance.now()>=deadline){
+          await new Promise(resolve=>setTimeout(resolve,0));
+          deadline=performance.now()+24;
+        }
+      }
+    }
     function copyAttributes(from,to){
       // URLs, form actions, autofocus, handlers and user-entered field values never transfer.
       for(const a of from.attributes){
@@ -76,14 +86,19 @@ async function inspectHTMLDesign(html, width=960){
     const stable=doc.createElement('style');
     stable.textContent='*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}html{scrollbar-width:none!important}html::-webkit-scrollbar{display:none}';
     doc.head.append(stable);
-    function copy(sourceNode,parent,depth,sourceIndex=0){
+    function* copyChildren(source,parent,depth){
+      let index=0;
+      for(const child of source.childNodes)yield* copy(child,parent,depth,index++);
+    }
+    function* copy(sourceNode,parent,depth,sourceIndex){
+      yield;
       if(depth>180)throw Error('This screen has very deeply nested markup. Import a smaller section.');
       if(sourceNode.nodeType===3){
         const t=doc.createTextNode(sourceNode.data);names.set(t,ids.get(sourceNode.parentElement)+'-t'+sourceIndex);parent.append(t);return;
       }
       if(sourceNode.nodeType!==1)return;
       const tag=sourceNode.localName;
-      if(tag==='fs-import-html'||tag==='fs-import-body'){sourceNode.childNodes.forEach((child,i)=>copy(child,parent,depth+1,i));return}
+      if(tag==='fs-import-html'||tag==='fs-import-body'){yield* copyChildren(sourceNode,parent,depth+1);return}
       if(tag==='fs-import-head')return;
       if(discard.has(tag)){
         if(['svg','math','iframe','embed','object','canvas','audio','video'].includes(tag)){skipped++;warnings.add('Vector artwork, media, frames and canvas widgets need to be recreated or supplied as an image.')}
@@ -95,17 +110,21 @@ async function inspectHTMLDesign(html, width=960){
       if(!allowed.has(tag)){warnings.add('Custom elements were reduced to the static content inside them.')}
       copyAttributes(sourceNode,target);names.set(target,ids.get(sourceNode));parent.append(target);
       if(['textarea','input','img','br','hr','wbr'].includes(tag))return;
-      sourceNode.childNodes.forEach((child,i)=>copy(child,target,depth+1,i));
+      yield* copyChildren(sourceNode,target,depth+1);
     }
     const frag=doc.createDocumentFragment();
-    (bodyRoot||root).childNodes.forEach((child,i)=>copy(child,frag,0,i));
+    await runBatches(copyChildren(bodyRoot||root,frag,0));
     doc.body.append(frag);
     if(images.length){
       let timer;
       try{await Promise.race([Promise.allSettled(images.map(img=>img.decode())),new Promise(resolve=>{timer=setTimeout(resolve,1800)})])}
       finally{clearTimeout(timer)}
     }
-    const computed=el=>view.getComputedStyle(el);
+    const styles=new WeakMap();
+    function computed(el){
+      if(!styles.has(el))styles.set(el,view.getComputedStyle(el));
+      return styles.get(el);
+    }
     const clear=c=>!c||c==='transparent'||c==='rgba(0, 0, 0, 0)'||/rgba\([^)]*,\s*0(?:\.0+)?\)$/.test(c);
     function color(value){
       if(clear(value))return 'transparent';
@@ -126,7 +145,7 @@ async function inspectHTMLDesign(html, width=960){
     function rectBox(r){
       return [Math.round(r.left),Math.round(r.top),Math.max(1,Math.round(r.width)),Math.max(1,Math.round(r.height))];
     }
-    function usable(r){return r.width>0&&r.height>0&&Math.max(Math.abs(r.x),Math.abs(r.y),r.width,r.height)<250000}
+    function usable(r){return r.width>0&&r.height>0&&[r.x,r.y,r.width,r.height].every(Number.isFinite)}
     function border(s){return s.borderTopStyle!=='none'&&parseFloat(s.borderTopWidth)>0?s.borderTop:'0px solid transparent'}
     function painted(s){return !clear(s.backgroundColor)||s.backgroundImage!=='none'||s.boxShadow!=='none'||['Top','Right','Bottom','Left'].some(k=>parseFloat(s['border'+k+'Width'])>0&&s['border'+k+'Style']!=='none')}
     function appearance(n,s,r,textOnly){
@@ -157,12 +176,12 @@ async function inspectHTMLDesign(html, width=960){
     }
     function emit(el,type,label,r,s,role='main',props={},textOnly=false){
       if(!usable(r))return;
-      if(nodes.length>=2000)throw Error('This layout contains over 2,000 visible layers. Import one section at a time.');
+      if(nodes.length>=8000)throw Error('This layout contains over 8,000 visible layers. Import one section at a time.');
       const name=el.getAttribute('aria-label')||el.getAttribute('alt')||el.id||label||type;
       const n=node(type,label,rectBox(r),props);n.name=String(name).trim().slice(0,140)||type;n.text=label;
       appearance(n,s,r,textOnly);nodes.push(n);keys.push(names.get(el)+'/'+role);
     }
-    function readTable(el){
+    function* readTable(el){
       const rows=Array.from(el.rows);
       if(!rows.length)return '';
       function cell(t){
@@ -170,8 +189,18 @@ async function inspectHTMLDesign(html, width=960){
         if(text.includes('|'))warnings.add('Pipe characters in table cells were converted to a visual equivalent.');
         return text.replace(/\|/g,'｜');
       }
-      const lines=rows.map(tr=>Array.from(tr.cells,cell));
-      if(!rows[0].querySelector('th'))lines.unshift(Array.from({length:Math.max(...lines.map(line=>line.length),1)},(_,i)=>'Column '+(i+1)));
+      const lines=[];
+      let columns=1;
+      for(const row of rows){
+        const cells=[];
+        for(const td of row.cells){cells.push(cell(td));yield}
+        columns=Math.max(columns,cells.length);
+        lines.push(cells);
+      }
+      if(!rows[0].querySelector('th'))lines.unshift([]);
+      // The renderer sizes every row to its header. Keep values in wider data rows.
+      const header=lines[0];
+      while(header.length<columns)header.push('Column '+(header.length+1));
       if(el.querySelector('[rowspan],[colspan]'))warnings.add('Merged table cells were flattened into a standard Studio table.');
       return lines.map(line=>line.join(' | ')).join('\n');
     }
@@ -180,7 +209,8 @@ async function inspectHTMLDesign(html, width=960){
       const r=doc.createRange();r.selectNodeContents(t);
       emit(el,'Text',text,r.getBoundingClientRect(),s,'text:'+names.get(t),{},true);
     }
-    function walk(el){
+    function* walk(el){
+      yield;
       const s=computed(el);
       if(s.display==='none'||s.visibility==='hidden'||s.visibility==='collapse'||s.opacity==='0'||el.hidden)return;
       const tag=el.localName,r=el.getBoundingClientRect();
@@ -207,7 +237,7 @@ async function inspectHTMLDesign(html, width=960){
         emit(el,'Input',label,r,s,'control',props);return;
       }
       if(tag==='img'){if(el.hasAttribute('src'))emit(el,'Image',el.alt||'Image',r,s,'image',{src:el.getAttribute('src')});else skipped++;return}
-      if(tag==='table'){const rows=readTable(el);if(rows)emit(el,'Table',el.caption?.innerText||'Table',r,s,'table',{rows,initialState:'sample'});return}
+      if(tag==='table'){const rows=yield* readTable(el);if(rows)emit(el,'Table',el.caption?.innerText||'Table',r,s,'table',{rows,initialState:'sample'});return}
       if(['option','optgroup','datalist','br','wbr','col','colgroup'].includes(tag))return;
       const children=Array.from(el.children);
       if(el!==doc.body&&children.every(c=>c.localName==='br')){
@@ -215,13 +245,15 @@ async function inspectHTMLDesign(html, width=960){
         if(text&&usable(r)){emit(el,'Text',text,r,s);return}
       }
       if(el!==doc.body&&painted(s)&&usable(r))emit(el,children.length?'Module':'Shape',el.id||el.getAttribute('aria-label')||(children.length?'Panel':'Shape'),r,s,'back');
-      const entries=Array.from(el.childNodes);
-      const z=n=>n.nodeType===1?Number.parseInt(computed(n).zIndex,10)||0:0;
       // CSS paint order of positioned siblings; DOM order breaks equal z-index ties.
-      const ordered=entries.map(n=>({n,z:z(n)})).sort((a,b)=>a.z-b.z);
-      for(const {n} of ordered){if(n.nodeType===3)ownText(el,s,n);else if(n.nodeType===1)walk(n)}
+      const ordered=[];
+      for(const n of el.childNodes){
+        ordered.push({n,z:n.nodeType===1?Number.parseInt(computed(n).zIndex,10)||0:0});yield;
+      }
+      ordered.sort((a,b)=>a.z-b.z);
+      for(const {n} of ordered){if(n.nodeType===3)ownText(el,s,n);else if(n.nodeType===1)yield* walk(n)}
     }
-    walk(doc.body);
+    await runBatches(walk(doc.body));
     const height=Math.max(1,doc.body.scrollHeight,doc.documentElement.scrollHeight,...nodes.map(n=>n.boxes.laptop[1]+n.boxes.laptop[3]));
     if(!nodes.length&&(root.querySelector('script,template')||/\{\{[^}]+\}\}/.test(source))&&!doc.body.querySelector('button,input,select,textarea,table,p,h1,h2,div,main,section,article'))throw Error(unsupported);
     return {nodes,keys,width,height,title,background,warnings:[...warnings],skipped};

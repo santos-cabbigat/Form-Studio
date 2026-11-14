@@ -22,3 +22,12 @@
 .choiceEditor,.triggerFields{border:1px solid var(--line);border-radius:8px;margin:12px 0;padding:8px;min-width:0}.choiceEditor legend,.triggerFields legend{font-weight:600;font-size:12px}.choiceRow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 20px;align-items:end;gap:4px;margin-bottom:5px}.choiceRow label{font-size:10px;color:var(--muted)}.choiceRow input{width:100%;min-width:0}.choiceRow button{align-self:center}.pickerSettings h3{margin-top:12px}.pickerSettings .row{display:flex;gap:6px;flex-wrap:wrap}.triggerFields label{display:flex;gap:8px;align-items:center;padding:5px}.triggerFields input{width:auto}.object[data-picker-kind]{display:flex;align-items:center;justify-content:space-between;padding:0 12px}
 
 #importHTML,#importCSS{width:100%;max-width:100%}.dialog:has(#importHTML) label[hidden]{display:none}.dialog .importNotes{padding-inline-start:18px;font-size:12px;line-height:1.5;color:var(--muted)}#htmlImportStatus:not(:empty){padding:10px 12px;margin-top:10px;border:1px solid var(--line);border-radius:7px}#htmlImportStatus .hint{margin-bottom:0}
+
+#boardViewport{position:absolute;inset:0;overflow:hidden}
+#boardViewport.longScreen{overflow-y:auto;overflow-anchor:none;overscroll-behavior:contain}
+#boardViewport.longScreen #sheetWrap{position:relative;top:0;margin:36px 0 72px;overflow:clip;overflow-clip-margin:36px}
+
+.codePart [data-cmd=expand-code]{margin-top:8px}
+.inspector.wideCode{position:fixed;top:115px;right:0;bottom:0;width:min(660px,65vw);z-index:8;box-shadow:-6px 3px 24px #25133526}
+.inspector.wideCode .codeArea{height:clamp(250px,48dvh,640px)}
+@media(max-width:850px){.inspector.wideCode.shown{width:calc(100vw - 16px);right:8px;bottom:74px}}

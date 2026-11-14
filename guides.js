@@ -37,21 +37,26 @@ function matchGuide(axis, rect, handle, targets, tolerance) {
   const start=rect[axis], size=rect[axis+2], end=start+size;
   const low = handle && (axis===0 ? handle.endsWith('l') : handle.startsWith('t'));
   const resizeEdge = low ? start : end;
-  const moving = handle ? [resizeEdge] : [start,end,start+size/2];
+  const center=start+size/2, first=(handle?resizeEdge:start)-tolerance, last=(handle?resizeEdge:end)+tolerance;
+  const other=1-axis, crossStart=rect[other], crossEnd=crossStart+rect[other+2];
   let best = null;
   function consider(delta, target, line, equalSize) {
-    if (Math.abs(delta)>tolerance || (handle && size+(low?-delta:delta)<12)) return;
-    const other = 1-axis;
-    const distance = Math.max(0, target.box[other]-rect[other]-rect[other+2], rect[other]-target.box[other]-target.box[other+2]);
+    const gap=Math.abs(delta);
+    if (gap>tolerance || (best&&gap>=best.score) || (handle && size+(low?-delta:delta)<12)) return;
+    const distance = Math.max(0, target.box[other]-crossEnd, crossStart-target.box[other]-target.box[other+2]);
     // Prefer a closer snap first; overlapping or nearby targets break ties.
-    const score = Math.abs(delta) + Math.min(distance,10000)*0.00001 + (equalSize ? 0.000001 : 0);
+    const score = gap + Math.min(distance,10000)*0.00001 + (equalSize ? 0.000001 : 0);
     if (!best || score<best.score) best={axis,delta,target,line,equalSize,score};
   }
+  function checkLine(line,target){
+    if(line<first||line>last)return;
+    if(handle){consider(line-resizeEdge,target,line,false);return}
+    consider(line-start,target,line,false);consider(line-end,target,line,false);consider(line-center,target,line,false);
+  }
   for(const target of targets) {
+    if(best?.score===0)break;
     const b=target.box, s=b[axis], length=b[axis+2];
-    for(const line of [s,s+length,s+length/2]) {
-      for(const anchor of moving) consider(line-anchor,target,line,false);
-    }
+    if(s<=last&&s+length>=first){checkLine(s,target);checkLine(s+length,target);checkLine(s+length/2,target)}
     if(handle && !target.canvas) {
       const delta = (length-size)*(low?-1:1);
       consider(delta,target,resizeEdge+delta,true);
@@ -101,8 +106,15 @@ function drawGuides(rect, matches, handle, targets) {
     if(!handle) continue;
     const size=rect[axis+2];
     // An aligned edge and an equal dimension can both match on the same axis.
-    const same=m?.equalSize?m.target:targets.filter(v=>!v.canvas&&v.box[axis+2]===size)
-      .sort((a,b)=>Math.abs(a.box[other]-rect[other])-Math.abs(b.box[other]-rect[other]))[0];
+    let same=m?.equalSize?m.target:null;
+    if(!same){
+      let distance=Infinity;
+      for(const target of targets){
+        if(target.canvas||target.box[axis+2]!==size)continue;
+        const gap=Math.abs(target.box[other]-rect[other]);
+        if(gap<distance){same=target;distance=gap;if(gap===0)break}
+      }
+    }
     if(same){
       sizes.push((axis===0?'Width':'Height')+' = '+size+' px');
       for(const box of [rect,same.box])line(axis===1,box[other]+box[other+2]+3/zoom,box[axis],box[axis]+size,true);

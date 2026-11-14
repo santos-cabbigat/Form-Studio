@@ -115,3 +115,41 @@ function drawGuides(rect, matches, handle, targets) {
   }
   if(overlay.childElementCount)$('#sheet').append(overlay);
 }
+
+function windowGaps(rect, frame) {
+  const [x,y,w,h]=rect;
+  return {top:y-frame[1], bottom:frame[1]+frame[3]-y-h,
+          left:x-frame[0], right:frame[0]+frame[2]-x-w};
+}
+
+// These labels only read the final box. They never enter the snapping calculation.
+function drawGapLabels(rect, frame) {
+  const sheet=$('#sheet');
+  let overlay=sheet.querySelector('.gapOverlay');
+  if(!overlay) {
+    overlay=document.createElement('div');overlay.className='gapOverlay';
+    overlay.setAttribute('aria-hidden','true');
+    for(const edge of ['top','right','bottom','left']){
+      const tag=document.createElement('span');tag.dataset.edge=edge;overlay.append(tag);
+    }
+    sheet.append(overlay);
+  }
+  const zoom=Math.max(scale,.1), [x,y,w,h]=rect;
+  const gaps=windowGaps(rect,frame);
+  const between=(a,b)=>(a+b)/2;
+  const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
+  const centerX=x+w/2, centerY=y+h/2;
+  const positions={
+    top:[centerX,between(frame[1],y)],
+    right:[between(frame[0]+frame[2],x+w),centerY],
+    bottom:[centerX,between(frame[1]+frame[3],y+h)],
+    left:[between(frame[0],x),centerY]
+  };
+  overlay.style.setProperty('--gap-zoom',1/zoom);
+  for(const tag of overlay.children) {
+    const edge=tag.dataset.edge, mm=Math.round(gaps[edge]*25.4/96*10)/10;
+    tag.textContent=cap(edge)+' '+mm+' mm';
+    tag.style.left=clamp(positions[edge][0],frame[0]+38/zoom,frame[0]+frame[2]-38/zoom)+'px';
+    tag.style.top=clamp(positions[edge][1],frame[1]+9/zoom,frame[1]+frame[3]-9/zoom)+'px';
+  }
+}

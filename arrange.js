@@ -57,16 +57,20 @@ function moveArrangedMember(member, axis, delta) {
   node.boxes[device] = layout;
 }
 
-function arrangeDialog() {
+function arrangeDialog(ref=null) {
   const items = arrangeItems();
   if (!items.length) { toast('Select an element or group to arrange.'); return; }
   const directions = (axis, choices) => '<div class="arrangeRow">' + choices.map(([action,label]) =>
     '<button class="btn" data-arrange="'+action+'" data-axis="'+axis+'">'+label+'</button>'
   ).join('') + '</div>';
   const activeText = selectedLayers().filter(n => ['Text','Input','Button'].includes(n.type));
-  const scope = items.length > 1
-    ? field('Align to','<select id="arrangeScope"><option value="selection">Selected items</option><option value="canvas">Canvas · move selection together</option></select>')
-    : '<p class="hint">Align to the current canvas.</p>';
+  const scopes = [];
+  if(items.length>1)scopes.push(['selection','Selected items']);
+  scopes.push(['canvas',items.length>1?'Canvas · move selection together':'Canvas']);
+  if(ref)scopes.push(['reference',ref.label]);
+  scopes.push(['pick','Pick a reference object…'],['mark','Mark an area…']);
+  const scope=field('Align to','<select id="arrangeScope">'+options(scopes,ref?'reference':scopes[0][0])+'</select>')+
+    '<div class="referenceQuick">'+btn('center-on-object','Center on a shape…','','btn')+btn('center-in-area','Center in an area…','','btn')+'</div>';
   modal('Arrange', '<p class="arrangeSummary">'+countText(selected.length)+' · '+items.length+' movable '+(items.length === 1 ? 'item' : 'items')+' · '+cap(device)+'</p>'+ scope +
     '<fieldset><legend>Horizontal alignment</legend>'+directions(0,[['start','Left'],['center','Center'],['end','Right']])+'</fieldset>'+
     '<fieldset><legend>Vertical alignment</legend>'+directions(1,[['start','Top'],['center','Middle'],['end','Bottom']])+'</fieldset>'+
@@ -90,10 +94,12 @@ function arrangeDialog() {
       } else {
         const current = arrangeItems();
         const extent = enclosingBox(current.map(t => t.box));
-        const canvas = current.length===1 || $('#arrangeScope')?.value==='canvas';
+        const scopeValue=$('#arrangeScope').value;
+        const canvas=scopeValue==='canvas'||scopeValue==='reference';
         const alignTogether = canvas && !['equal','gap'].includes(action);
         const targets = alignTogether ? [{members:current.flatMap(t => t.members), box:extent}] : current;
-        const reference = alignTogether ? [0,0,...bounds(page(),device,project)] : extent;
+        const reference = !alignTogether ? extent : scopeValue==='reference' ? referenceBox(ref) : [0,0,...bounds(page(),device,project)];
+        if(!reference)throw Error('Choose a reference object or area.');
         const moves = arrangeOffsets(targets,axis,action,reference,gap).filter(m => m.delta !== 0);
         if (!moves.length) { status.textContent='Items already in position.'; return; }
         change(() => moves.forEach(({item,delta}) => item.members.forEach(m => moveArrangedMember(m,axis,delta))));
@@ -105,9 +111,15 @@ function arrangeDialog() {
   for (const button of dlg.querySelectorAll('[data-arrange]')) {
     button.onclick = () => apply(button.dataset.axis==='text'?'text':Number(button.dataset.axis),button.dataset.arrange);
   }
+  $('#arrangeScope').onchange=e=>{
+    if(e.target.value==='pick')startReferencePick('element',ref);
+    if(e.target.value==='mark')startReferencePick('area',ref);
+  };
+  dlg.querySelector('[data-cmd=center-on-object]').onclick=()=>startReferencePick('element',ref,true);
+  dlg.querySelector('[data-cmd=center-in-area]').onclick=()=>startReferencePick('area',ref,true);
   const even = dlg.querySelector('[data-cmd=even-gap]');
   if(even) even.onclick=()=>apply(Number($('#gapAxis').value),'equal');
   const form = $('#gapForm');
   if(form)form.onsubmit=e=>{e.preventDefault();const input=$('#arrangeGap');if(input.reportValidity())apply(Number($('#gapAxis').value),'gap',input.valueAsNumber)};
-  undo.onclick=()=>{history(true);dismiss();if(selected.length)arrangeDialog()};
+  undo.onclick=()=>{history(true);dismiss();if(selected.length)arrangeDialog(ref&&referenceBox(ref)?ref:null)};
 }

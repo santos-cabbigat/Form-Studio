@@ -22,8 +22,8 @@ function dismiss(){ $('#overlay').replaceChildren() }
 function modal(title,body,wide=false){$('#overlay').innerHTML='<div class="dialogBg"><section class="dialog '+(wide?'wide':'')+'" role="dialog" aria-modal="true" aria-label="'+esc(title)+'"><header class="dialogHead"><h2>'+esc(title)+'</h2>'+btn('dismiss','', 'close','')+'</header>'+body+'</section></div>';let first=$('.dialog input,.dialog select,.dialog textarea');if(first)first.focus()}
 function closeSide(){for(const s of ['.library','.inspector'])$(s).classList.remove('shown')}
 function choosePage(id){pageId=id;selected=[];multi=false;zoomFactor=1;pan=[0,0];dismiss();render()}
-function selectIds(ids){selected=[...new Set(ids)];codeDirty=false;drawBoard();drawProps();if(['Layers','Triggers'].includes(tab))drawLibrary()}
-function render(){clean();$('#projectName').textContent=project.name;
+function selectIds(ids){endReferencePick();selected=[...new Set(ids)];codeDirty=false;drawBoard();drawProps();if(['Layers','Triggers'].includes(tab))drawLibrary()}
+function render(){clean();if(referencePick&&referencePick.context!==referenceContext())endReferencePick();$('#projectName').textContent=project.name;
  $('#tabs').innerHTML=tabs.map(t=>'<button data-tab="'+t+'" class="'+(tab===t?'active':'')+'">'+icon(t.toLowerCase())+t+'</button>').join('');
  $('#pageBtn').innerHTML=icon(page().kind==='window'?'window':'page',15)+esc(page().name)+icon('down',13);
  $('#devices').innerHTML=Object.keys(devices).map(d=>'<button title="'+cap(d)+' layout" aria-label="'+cap(d)+' layout" class="'+(d===device?'active':'')+'" data-device="'+d+'">'+icon(d,15)+'<span>'+cap(d)+'</span></button>').join('');
@@ -58,13 +58,13 @@ function drawLibrary(){
  }else if(tab==='Triggers'){
  const n=sel();pane='<div class="panel"><h2>Triggers</h2>'+(n?'<h3>'+esc(n.name)+'</h3>'+n.actions.map((a,i)=>'<div class="row"><button class="actLine" data-editaction="'+i+'">'+icon('triggers',14)+esc(actName(a))+'</button><button title="Remove trigger" data-rmaction="'+i+'">×</button></div>').join('')+btn('add-action','Add trigger','plus','btn full'):'<p>Select an element to attach a trigger.</p>')+'<h3 class="mt">My trigger templates</h3>'+templateRows('',true)+btn('new-trigger','New trigger template','plus','addTemplate')+'</div>'
  }else if(tab==='Palette'){
- pane='<div class="panel"><h2>Color palette</h2><p>Apply a swatch to the selected element’s fill.</p><div class="swatches">'+project.palette.map(c=>'<button class="swatch" data-swatch="'+esc(c)+'" style="background:'+esc(c)+'" title="Apply '+esc(c)+'"></button>').join('')+'</div>'+field('Add a custom color','<input type="color" id="newColor" value="#a28bc2">')+btn('add-color','Save color','plus','btn')+'<h3 class="mt">Palette presets</h3>'+['Studio violet','Coastal green','Warm clay'].map((v,i)=>'<button class="variant" data-palette="'+i+'">'+v+icon('right',13)+'</button>').join('')+'</div>'
+ pane='<div class="panel"><h2>Color palette</h2><p>Apply a swatch to the selected element’s fill.</p><div class="swatches">'+project.palette.map(c=>'<button class="swatch" data-swatch="'+esc(c)+'" style="background:'+esc(c)+'" title="Apply '+esc(c)+'"></button>').join('')+'</div>'+field('Add a custom color','<input type="color" id="newColor" value="#a28bc2">')+colorPickButton('palette','palette color')+btn('add-color','Save color','plus','btn')+'<h3 class="mt">Palette presets</h3>'+['Studio violet','Coastal green','Warm clay'].map((v,i)=>'<button class="variant" data-palette="'+i+'">'+v+icon('right',13)+'</button>').join('')+'</div>'
  }else{
  pane='<div class="panel"><h2>Theme</h2>'+field('Project font','<select data-theme="font">'+options(families,project.theme.font)+'</select>')+themeColor('Accent','accent')+themeColor('Canvas background','background')+'<p>Theme settings apply across the project. Buttons using the accent color update together.</p></div>'
  }
  $('#library').innerHTML=pane
 }
-function themeColor(l,k){return field(l,'<input type="color" data-theme="'+k+'" value="'+esc(project.theme[k])+'">')}
+function themeColor(l,k){return field(l,'<input type="color" data-theme="'+k+'" value="'+esc(project.theme[k])+'">')+colorPickButton(k,l)}
 function templateRows(q,onlyTrigger=false){return project.templates.filter(t=>(!onlyTrigger||t.kind==='trigger')&&t.name.toLowerCase().includes(q.toLowerCase())).map(t=>'<div class="templateRow">'+preset('use-'+t.id,t.name,t.kind==='trigger'?'triggers':t.kind==='window'?'window':t.kind==='block'?'group':'code')+'<button data-edittemplate="'+t.id+'" title="Manage template" aria-label="Manage '+esc(t.name)+'">⋯</button></div>').join('')}
 function drawProps(){
  const n=sel(),head='<div class="insHead"><h2>Inspector</h2>'+icon('sliders',16)+'</div><div style="padding:0 15px 13px"><div class="seg"><button data-mode="design" class="'+(mode==='design'?'active':'')+'">'+icon('sliders',13)+'Design</button><button data-mode="code" class="'+(mode==='code'?'active':'')+'">'+icon('code',13)+'Code</button></div></div>';let body='';
@@ -81,7 +81,7 @@ function drawProps(){
  if(mode==='design'&&n)body='<div class="arrangeEntry">'+btn('arrange','Arrange','sliders','btn full')+'</div>'+body;
  $('#inspector').innerHTML=head+body;$('#arrangeTool').disabled=!selected.length;const code=$('#elementCode');if(code){code.setSelectionRange(0,code.value.length);code.scrollTop=0}
 }
-function colorControl(label,k,v){const actual=v==='var(--accent)'?project.theme.accent:/^#[a-f\d]{6}$/i.test(v)?v:'#ffffff';return '<label class="colorRow">'+label+'<span class="colorBox"><input type="color" data-style="'+k+'" value="'+actual+'">'+esc(v==='var(--accent)'?actual.toUpperCase():v)+'</span></label>'}
+function colorControl(label,k,v){const actual=v==='var(--accent)'?project.theme.accent:/^#[a-f\d]{6}$/i.test(v)?v:'#ffffff';return '<div class="colorRow"><span>'+label+'</span><label class="colorBox"><input type="color" aria-label="'+label+'" data-style="'+k+'" value="'+actual+'">'+esc(v==='var(--accent)'?actual.toUpperCase():v)+'</label>'+colorPickButton(k,label)+'</div>'}
 function sourceFor(n){
  const b=boxFor(n,device,project,page()), selector='#'+n.id, rules=Object.entries(cssProps(n,b)).map(([k,v])=>'  '+k+': '+v+';').join('\n');
  let html=n.type==='Custom'?'<!-- Embedded component -->\n'+n.html:markup(n).replace(/^<(\w+)/,'<$1 id="'+n.id+'"');
@@ -243,6 +243,7 @@ function command(c){
 document.addEventListener('click',e=>{
  const b=e.target.closest('button');if(!b){if(e.target.classList.contains('dialogBg'))dismiss();return}
  if(b.dataset.cmd)command(b.dataset.cmd);
+ if(b.dataset.sample)pickDesignColor(b.dataset.sample);
  if(b.dataset.tab){tab=b.dataset.tab;render();if(innerWidth<=620||innerWidth<=850&&tab!=='Insert'){closeSide();$('#library').classList.add('shown')}}
  if(b.dataset.mode){mode=b.dataset.mode;drawProps();if(mode==='code')selectCode()}
  if(b.dataset.device){device=b.dataset.device;zoomFactor=1;pan=[0,0];render()}
@@ -273,7 +274,7 @@ $('#selectTool').onclick=()=>{panMode=false;render()};$('#panTool').onclick=()=>
 $('#openLib').onclick=()=>{$('#inspector').classList.remove('shown');$('#library').classList.toggle('shown')};$('#openProps').onclick=()=>{$('#library').classList.remove('shown');$('#inspector').classList.toggle('shown')};
 const stage=$('#stage');
 stage.addEventListener('pointerdown',e=>{
- if(e.button!==0||e.target.closest('.floatTools'))return;closeSide();const wrap=e.target.closest('.nodeWrap');if(!wrap&&!panMode){selectIds([]);return}
+ if(e.button!==0||e.target.closest('.floatTools,#referenceNotice'))return;closeSide();const wrap=e.target.closest('.nodeWrap');if(!wrap&&!panMode){selectIds([]);return}
  e.preventDefault();stage.setPointerCapture(e.pointerId);
  if(panMode){gesture={pan:[...pan],x:e.clientX,y:e.clientY};return}
  const n=page().nodes.find(v=>v.id===wrap.dataset.id),handle=e.target.dataset.handle;
@@ -294,9 +295,11 @@ stage.addEventListener('pointermove',e=>{if(!gesture)return;const g=gesture,dx=e
    setBox(i.n,next,device,project,page());const box=boxFor(i.n,device,project,page());actual.push(box);
    const el=$('.nodeWrap[data-id="'+i.n.id+'"]');if(el)position(el,box);
  }
- if(assist)drawGuides(enclosingBox(actual),matches,g.handle,g.targets);else clearGuides();
+ const rect=enclosingBox(actual);
+ if(assist)drawGuides(rect,matches,g.handle,g.targets);else clearGuides();
+ drawGapLabels(rect,g.targets[0].box);
 });
-function finishGesture(cancel=false){clearGuides();if(gesture?.moved){const initial=gesture.initial;if(cancel){project=JSON.parse(initial)}else{remember(initial);write()}render()}gesture=null}
+function finishGesture(cancel=false){clearGuides();$('#sheet .gapOverlay')?.remove();if(gesture?.moved){const initial=gesture.initial;if(cancel){project=JSON.parse(initial)}else{remember(initial);write()}render()}gesture=null}
 stage.addEventListener('pointerup',()=>finishGesture());stage.addEventListener('pointercancel',()=>finishGesture(true));
 document.addEventListener('dragstart',e=>{const b=e.target.closest('[data-insert]');if(b)e.dataTransfer.setData('text/plain','formstudio:'+b.dataset.insert)});
 stage.addEventListener('dragover',e=>e.preventDefault());stage.addEventListener('drop',e=>{e.preventDefault();const t=e.dataTransfer.getData('text/plain').replace('formstudio:','');if(types.includes(t)){const r=$('#sheet').getBoundingClientRect();variantDialog(t,[(e.clientX-r.left)/scale,(e.clientY-r.top)/scale])}});

@@ -50,7 +50,8 @@ function codePanel(){
 }
 async function copyForChat(){
  const area=$('#elementCode');if(!area)return;selectCode();
- const text='Please edit this Form Studio '+selectionKind()+' ('+selectionTitle()+') for the '+device+' layout. Return the complete replacement block. Preserve the layer IDs, data attributes, template wrappers and trigger connections unless I ask to change them.\n\n'+area.value;
+ const note=selected.length===1?sel().devNote:!selected.length?page().devNote:'';
+ const text='Please edit this Form Studio '+selectionKind()+' ('+selectionTitle()+') for the '+device+' layout. Return the complete replacement block. Preserve the layer IDs, data attributes, template wrappers and trigger connections unless I ask to change them.'+(note?'\nMy developer note: '+note:'')+'\n\n'+area.value;
  try{await navigator.clipboard.writeText(text);toast('Copied for ChatGPT')}catch{try{if(!document.execCommand('copy'))throw Error();toast('Selected code copied')}catch{toast('Code is selected. Use your device’s Copy command.')}} 
 }
 function applySelection(){

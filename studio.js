@@ -22,7 +22,18 @@ function dismiss(){ $('#overlay').replaceChildren() }
 function modal(title,body,wide=false){$('#overlay').innerHTML='<div class="dialogBg"><section class="dialog '+(wide?'wide':'')+'" role="dialog" aria-modal="true" aria-label="'+esc(title)+'"><header class="dialogHead"><h2>'+esc(title)+'</h2>'+btn('dismiss','', 'close','')+'</header>'+body+'</section></div>';let first=$('.dialog input,.dialog select,.dialog textarea');if(first)first.focus()}
 function closeSide(){for(const s of ['.library','.inspector'])$(s).classList.remove('shown')}
 function choosePage(id){endReferencePick();closeSide();panMode=false;pageId=id;selected=[];multi=false;zoomFactor=1;pan=[0,0];dismiss();render()}
-function selectIds(ids){endReferencePick();selected=[...new Set(ids)];drawBoard();drawProps();if(['Layers','Triggers'].includes(tab))drawLibrary()}
+function selectIds(ids){
+ endReferencePick();const old=selected;selected=[...new Set(ids)];
+ for(const id of new Set([...old,...selected]))markCanvasLayer(id,selected.includes(id));
+ drawProps();
+ if(tab==='Layers'){
+   lastLayerListing='';
+   for(const el of $$('#library [data-layer].active'))el.classList.remove('active');
+   for(const id of selected)$('#library [data-layer="'+CSS.escape(id)+'"]')?.classList.add('active');
+   const tools=$('#layerCommands');if(tools)tools.innerHTML=layerCommands();
+   const on=$('#library [data-cmd=multi]');if(on&&multi)on.textContent='Finish selecting ('+selected.length+')';
+ }else if(tab==='Triggers')drawLibrary();
+}
 function render(){clean();if(referencePick&&referencePick.context!==referenceContext())endReferencePick();$('#projectName').textContent=project.name;
  $('#tabs').innerHTML=tabs.map(t=>'<button data-tab="'+t+'" class="'+(tab===t?'active':'')+'">'+icon(t.toLowerCase())+t+'</button>').join('');
  $('#pageBtn').innerHTML=icon(page().kind==='window'?'window':'page',15)+esc(page().name)+icon('down',13);
@@ -33,17 +44,51 @@ function render(){clean();if(referencePick&&referencePick.context!==referenceCon
  $('#selectTool').innerHTML=icon('select',15);$('#panTool').innerHTML=icon('pan',16);$('#selectTool').classList.toggle('on',!panMode);$('#panTool').classList.toggle('on',panMode);$('#sizeBtn').innerHTML=icon('ruler',13)+project.widths[device]+' px '+icon('down',11);
  drawLibrary();drawBoard();drawProps();syncGuideButton();$('#multiTool').classList.toggle('on',multi);$('#multiTool').setAttribute('aria-pressed',String(multi))
 }
+const canvasLayers=new Map();
+let latestBoard=null;
+function markCanvasLayer(id,on){
+ const entry=canvasLayers.get(id);if(!entry)return;
+ const wrap=entry.wrap;if(wrap.classList.contains('selected')===on)return;
+ wrap.classList.toggle('selected',on);
+ if(on){for(const dir of ['tl','tr','bl','br']){const h=document.createElement('i');h.className='handle '+dir;h.dataset.handle=dir;wrap.append(h)}}
+ else for(const h of wrap.querySelectorAll('.handle'))h.remove();
+}
 function drawBoard(){
- const s=$('#sheet'),pg=page(),[w,h]=bounds(pg,device,project);s.innerHTML='';s.style.width=w+'px';s.style.height=h+'px';s.style.background=project.theme.background;s.style.fontFamily=project.theme.font;s.style.setProperty('--accent',project.theme.accent);
- for(const n of pg.nodes){if(n.hide?.[device])continue;const b=boxFor(n,device,project,pg),wrap=document.createElement('div');wrap.className='nodeWrap'+(selected.includes(n.id)?' selected':'');wrap.dataset.id=n.id;
- position(wrap,b);wrap.append(makeEl(n,b,true));for(const dir of ['tl','tr','bl','br']){const handle=document.createElement('i');handle.className='handle '+dir;handle.dataset.handle=dir;wrap.append(handle)}s.append(wrap)}
+ const s=$('#sheet'),pg=page(),[w,h]=bounds(pg,device,project);
+ if(latestBoard!==pg){s.replaceChildren();canvasLayers.clear();latestBoard=pg}
+ s.style.width=w+'px';s.style.height=h+'px';s.style.background=project.theme.background;s.style.fontFamily=project.theme.font;s.style.setProperty('--accent',project.theme.accent);
+ const visible=new Set(),chosen=new Set(selected);
+ let next=s.firstElementChild;
+ for(const n of pg.nodes){
+   if(n.hide?.[device])continue;
+   const b=boxFor(n,device,project,pg),signature=JSON.stringify([n.type,n.name,n.text,n.style,n.extraCSS,n.inputType,n.requirement,n.initialState,n.emptyMessage,n.picker]);
+   let entry=canvasLayers.get(n.id);
+   if(!entry){const wrap=document.createElement('div');wrap.className='nodeWrap';wrap.dataset.id=n.id;entry={wrap};canvasLayers.set(n.id,entry)}
+   const wrap=entry.wrap;
+   if(entry.signature!==signature||entry.src!==n.src||entry.html!==n.html||entry.rows!==n.rows||entry.choices!==n.choices){
+     const el=makeEl(n,b,true);
+     if(wrap.firstElementChild)wrap.firstElementChild.replaceWith(el);else wrap.prepend(el);
+     Object.assign(entry,{signature,src:n.src,html:n.html,rows:n.rows,choices:n.choices});
+   }
+   if(!entry.box||b.some((v,i)=>v!==entry.box[i])){position(wrap,b);entry.box=b}
+   wrap.classList.toggle('canvasLocked',!!n.locked);markCanvasLayer(n.id,chosen.has(n.id));visible.add(n.id);
+   if(wrap!==next)s.insertBefore(wrap,next);
+   next=wrap.nextElementSibling;
+ }
+ for(const [id,entry] of canvasLayers)if(!visible.has(id)){entry.wrap.remove();canvasLayers.delete(id)}
  $('#boardLabel').innerHTML=icon(pg.kind==='window'?'window':'page',13)+esc(pg.name);$('#boardSize').textContent=w+' × '+h;fitBoard()
 }
 function position(el,b){Object.assign(el.style,{left:b[0]+'px',top:b[1]+'px',width:b[2]+'px',height:b[3]+'px'})}
 function fitBoard(){const [w,h]=bounds(page(),device,project),stage=$('#stage'),m=stage.clientWidth<480?22:54;scale=Math.max(.1,Math.min((stage.clientWidth-m)/w,(stage.clientHeight-114)/h,1.35)*zoomFactor);$('#sheet').style.transform='scale('+scale+')';const wrap=$('#sheetWrap');wrap.style.width=w*scale+'px';wrap.style.height=h*scale+'px';wrap.style.transform='translate(calc(-50% + '+pan[0]+'px),calc(-50% + '+pan[1]+'px))';$('#zoom').textContent=Math.round(scale*100)+'%'}
 function preset(cmd,title,ic,color=''){return '<button data-cmd="'+cmd+'" class="preset"><span class="presetIcon '+color+'">'+icon(ic,16)+'</span><span>'+esc(title)+'</span>'+icon('right',13)+'</button>'}
 function section(title,body){return '<section class="libSection"><h3 class="sectionTitle">'+esc(title)+'</h3>'+body+'</section>'}
+let lastLayerListing='';
 function drawLibrary(){
+ if(tab==='Layers'){
+   const state=JSON.stringify([pageId,device,multi,selected,project.pages.map(p=>[p.id,p.name]),page().nodes.map(n=>[n.id,n.type,n.name,n.group,n.locked,n.hide?.[device]])]);
+   if(state===lastLayerListing)return;
+   lastLayerListing=state;
+ }else lastLayerListing='';
  let pane='';
  if(tab==='Insert'){
  const match=t=>t.toLowerCase().includes(search.toLowerCase());
@@ -53,8 +98,8 @@ function drawLibrary(){
  pane+=section('My templates',templateRows(search)+btn('new-template','Add template','plus','addTemplate'));
  }else if(tab==='Layers'){
  pane='<div class="panel"><h2>Layers</h2>'+field('Screen or window','<select id="pageSelect">'+options(project.pages.map(p=>[p.id,p.name]),pageId)+'</select>')+
- '<div class="row">'+btn('pages','Manage screens','page','btn smallBtn')+'</div><h3 class="mt">Elements</h3>'+btn('multi',multi?'Finish selecting ('+selected.length+')':'Select multiple','group','btn smallBtn')+
- [...page().nodes].reverse().map(n=>'<button data-layer="'+n.id+'" class="layer '+(selected.includes(n.id)?'active':'')+'">'+icon(categoryIcon(n.type),15)+esc(n.name)+(n.group?' '+icon('group',12):'')+'</button>').join('')+'<div class="row">'+btn('group','Group','','btn smallBtn')+btn('ungroup','Ungroup','','btn smallBtn')+'</div><div class="row">'+btn('forward','Bring forward','','btn smallBtn')+btn('back','Send back','','btn smallBtn')+'</div>'+btn('delete','Delete selection','','btn smallBtn')+'</div>'
+ '<div class="row">'+btn('pages','Manage screens','page','btn smallBtn')+btn('find-project','Find in project','search','btn smallBtn')+'</div><div id="layerCommands">'+layerCommands()+'</div><h3 class="mt">Elements</h3>'+btn('multi',multi?'Finish selecting ('+selected.length+')':'Select multiple','group','btn smallBtn')+
+ [...page().nodes].reverse().map(n=>'<button data-layer="'+n.id+'" class="layer '+(selected.includes(n.id)?'active':'')+'">'+icon(categoryIcon(n.type),15)+esc(n.name)+(n.locked?' · Locked':'')+(n.hide?.[device]?' · Hidden':'')+(n.group?' '+icon('group',12):'')+'</button>').join('')+'<div class="row">'+btn('group','Group','','btn smallBtn')+btn('ungroup','Ungroup','','btn smallBtn')+'</div><div class="row">'+btn('forward','Bring forward','','btn smallBtn')+btn('back','Send back','','btn smallBtn')+'</div>'+btn('delete','Delete selection','','btn smallBtn')+'</div>'
  }else if(tab==='Triggers'){
  const n=sel();pane='<div class="panel"><h2>Triggers</h2>'+(n?'<h3>'+esc(n.name)+'</h3>'+n.actions.map((a,i)=>'<div class="row"><button class="actLine" data-editaction="'+i+'">'+icon('triggers',14)+esc(actName(a))+'</button><button title="Remove trigger" data-rmaction="'+i+'">×</button></div>').join('')+btn('add-action','Add trigger','plus','btn full'):'<p>Select an element to attach a trigger.</p>')+'<h3 class="mt">My trigger templates</h3>'+templateRows('',true)+btn('new-trigger','New trigger template','plus','addTemplate')+'</div>'
  }else if(tab==='Palette'){
@@ -79,6 +124,7 @@ function drawProps(){
  body+='<div class="part"><h3>Interactions</h3>'+(n.actions.length?n.actions.map((a,i)=>'<button class="actLine" data-editaction="'+i+'">'+icon('triggers',14)+esc(actName(a))+'</button>').join(''):btn('add-action','Add trigger','triggers','btn smallBtn'))+'</div><div class="part">'+btn('save-selected','Save as template','library','btn full')+'</div>'
  }
  if(mode==='design'&&n)body+=linkedPart();
+ if(mode==='design')body+=notesPanel();
  if(mode==='design'&&n)body='<div class="arrangeEntry">'+btn('arrange','Arrange','sliders','btn full')+'</div>'+body;
  $('#inspector').innerHTML=head+body;$('#arrangeTool').disabled=!selected.length;const code=$('#elementCode');if(code){code.setSelectionRange(0,code.value.length);code.scrollTop=0}
 }
@@ -145,7 +191,7 @@ function variantDialog(type,at){
  })
 }
 function pickImage(cb){const inp=document.createElement('input');inp.type='file';inp.accept='image/png,image/jpeg,image/webp,image/gif';inp.onchange=()=>{const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{if(!/^data:image\/(png|jpeg|webp|gif);base64,/i.test(r.result)){toast('Choose a PNG, JPEG, GIF, or WebP image.');return}cb(r.result)};r.readAsDataURL(f)};inp.click()}
-function pagesDialog(){modal('Screens & windows',project.pages.map(p=>'<button class="variant" data-page="'+p.id+'"><span>'+icon(p.kind==='window'?'window':'page')+esc(p.name)+'</span>'+icon(p.id===pageId?'check':'right',14)+'</button>').join('')+'<div class="dialogActions">'+btn('save-screen-template','Save template','library')+btn('page-settings','Edit current')+btn('blank','New screen','plus','btn primary')+'</div>')}
+function pagesDialog(){modal('Screens & windows',project.pages.map(p=>'<button class="variant" data-page="'+p.id+'"><span>'+icon(p.kind==='window'?'window':'page')+esc(p.name)+'</span>'+icon(p.id===pageId?'check':'right',14)+'</button>').join('')+'<div class="dialogActions">'+btn('find-project','Find in project','search')+btn('save-screen-template','Save template','library')+btn('page-settings','Edit current')+btn('blank','New screen','plus','btn primary')+'</div>')}
 function pageSettings(){const p=page();modal(p.kind==='window'?'Window settings':'Screen settings',field('Name','<input id="pgName" value="'+esc(p.name)+'">')+(p.kind==='window'?'<div class="row">'+field('Width (px)','<input id="pgWidth" type="number" min="120" max="2000" value="'+p.width+'">')+field('Height (px)','<input id="pgHeight" type="number" min="100" max="2400" value="'+p.height+'">')+'</div>':'')+'<div class="dialogActions">'+btn('dismiss','Cancel')+btn('save-page','Save','','btn primary')+'</div>')}
 function actionDialog(index=null,sample=null){
  const n=sel();if(!n){toast('Select an element for this trigger.');return}
@@ -221,13 +267,15 @@ function preview(d=device,dataState='design',response='success'){
 }
 function download(body,path,type){const url=URL.createObjectURL(new Blob([body],{type})),a=document.createElement('a');a.href=url;a.download=path;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000)}
 function exportDialog(){
- modal('Export project',preset('html','Working website · HTML','code')+'<p class="hint">Opens offline in a browser. Includes screens, window sizes, images, device layouts, theme, and supported triggers.</p>'+preset('source-zip','Project source · ZIP','code')+'<p class="hint">Separate screen and component files, connected automatically. Extract and open index.html.</p>'+preset('json','Editable project · JSON','layers','mint')+'<p class="hint">Includes all designs, groups, triggers, and My templates. Import this file to continue on another device.</p><hr style="border:0;border-top:1px solid var(--line)">'+btn('import','Import project file','page','btn full'))
+ modal('Export project',preset('html','Working website · HTML','code')+'<p class="hint">Opens offline in a browser. Includes screens, window sizes, images, device layouts, theme, and supported triggers.</p>'+preset('source-zip','Project source · ZIP','code')+'<p class="hint">Includes your editable project, screen and component code, developer notes and a place to add logic. Extract and open index.html.</p>'+preset('json','Editable project · JSON','layers','mint')+'<p class="hint">Includes all designs, groups, triggers, and My templates. Import this file to continue on another device.</p><hr style="border:0;border-top:1px solid var(--line)">'+btn('import','Import project file','page','btn full'))
 }
 function validateImport(p){
  if(p?.format!=='form-studio'||p.version!==1||!Array.isArray(p.pages)||!p.pages.some(a=>a.kind==='screen')||!Array.isArray(p.templates)||!Array.isArray(p.palette)||!p.theme||typeof p.name!=='string'||!p.name.trim())throw Error('Choose a Form Studio project JSON file.');
  const hex=c=>/^#[a-f0-9]{6}$/i.test(c), id=x=>typeof x==='string'&&/^[a-z][a-z0-9_-]*$/i.test(x);
+ if(p.pages.some(pg=>!pg||pg.devNote!==undefined&&typeof pg.devNote!=='string'))throw Error('Screen notes must be text.');
  if(!p.palette.every(hex)||!hex(p.theme.accent)||!hex(p.theme.background)||!families.includes(p.theme.font)||Object.keys(devices).some(d=>!sizes[d].includes(p.widths?.[d])))throw Error('Project theme or device settings are invalid.');
  const checkNode=n=>{if(!n||!id(n.id)||!['Button','Text','Input','Image','Module','Shape','Table','Custom'].includes(n.type)||typeof n.name!=='string'||!n.style||!n.boxes?.laptop||!Array.isArray(n.actions)||Object.values(n.boxes).some(b=>!Array.isArray(b)||b.length!==4||b.some(v=>!Number.isFinite(v)))||n.style.radius<0||!Number.isFinite(n.style.radius)||!Number.isFinite(n.style.fontSize))throw Error('A component in the project is invalid.');
+ if(n.devNote!==undefined&&typeof n.devNote!=='string'||n.locked!==undefined&&typeof n.locked!=='boolean')throw Error('A layer note or lock setting is invalid.');
  if(n.group!==undefined&&!id(n.group))throw Error('A group ID is invalid.');
  if(n.type==='Input'&&n.choices!==undefined&&typeof n.choices!=='string')throw Error('Dropdown choices must be text.');if(n.actions.some(a=>a.action==='saveRow'&&(!Array.isArray(a.fields)||a.fields.some(k=>k!==''&&!id(k))||typeof a.message!=='string')))throw Error('A save trigger has invalid fields.');if(n.type==='Image'&&!/^data:image\/(png|jpeg|webp|gif);base64,/i.test(n.src||''))throw Error('This project has an unsupported image source.');
  if(n.type==='Custom'&&typeof n.html!=='string')throw Error('A custom component is invalid.');if(n.type==='Table'&&(typeof n.rows!=='string'||!n.rows.split(/\r?\n/).some(line=>line.trim())))throw Error('A table is invalid.');
@@ -244,6 +292,7 @@ function command(c){
  if(c.startsWith('use-'))return useTemplate(project.templates.find(t=>t.id===c.slice(4)));
  const n=sel();
  switch(c){
+ case 'merge-design':mergeDialog();break;case 'find-project':findInProject();break;case 'duplicate-layers':case 'lock-layers':case 'hide-layers':layerAction(c);break;
  case 'guides':toggleSmartGuides();break;case 'arrange':arrangeDialog();break;case 'undo':history(true);break;case 'redo':history(false);break;
  case 'preview':preview();break;case 'export':exportDialog();break;case 'dismiss':dismiss();break;
  case 'discard-code':dropCodeDraft();drawProps();break;case 'apply-code':applySelection();break;case 'copy-chat':copyForChat();break;case 'select-code':selectCode();break;case 'project-code':codeBrowser();break;case 'source-zip':downloadSources();break;case 'files':filesDialog();break;case 'new-file':newProject();break;case 'copy-file':newProject(true);break;case 'rename-file':$('#projectName').click();break;case 'cloud':cloudDialog();break;case 'save-selected':saveSelected();break;case 'pages':pagesDialog();break;case 'page-settings':pageSettings();break;
@@ -278,6 +327,7 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('change',e=>{
  const t=e.target,n=sel(),pg=page();
+ if(t.hasAttribute('data-dev-note')){const dest=selected.length?n:pg;if(dest)change(()=>dest.devNote=t.value.trim());return}
  if(t.id==='groupName'){const name=t.value.trim()||'Layer group';change(()=>selectedLayers().forEach(n=>n.groupName=name));return}
  if(t.id==='pageSelect'){choosePage(t.value);return}
  if(t.dataset.theme){change(()=>project.theme[t.dataset.theme]=t.value);return}
@@ -300,13 +350,15 @@ stage.addEventListener('pointerdown',e=>{
  e.preventDefault();stage.setPointerCapture(e.pointerId);
  if(panMode){gesture={pan:[...pan],x:e.clientX,y:e.clientY};return}
  const n=page().nodes.find(v=>v.id===wrap.dataset.id),handle=e.target.dataset.handle;
+ if(n.locked)return;
  if(e.shiftKey||e.ctrlKey||e.metaKey||multi){toggleLayers(n,true);return}
  if(!selected.includes(n.id))selectIds(n.group?page().nodes.filter(v=>v.group===n.group).map(v=>v.id):[n.id]);
+ if(selectedLayers().some(v=>v.locked))return;
  const items=page().nodes.filter(v=>selected.includes(v.id)).map(v=>({n:v,box:boxFor(v,device,project,page())}));
  if(!items.length)return;
- gesture={x:e.clientX,y:e.clientY,items,handle,targets:guideTargets(page(),new Set(selected)),initial:JSON.stringify(project),before:[Math.min(...items.map(i=>i.box[0])),Math.min(...items.map(i=>i.box[1])),Math.max(...items.map(i=>i.box[0]+i.box[2])),Math.max(...items.map(i=>i.box[1]+i.box[3]))]};
+ gesture={x:e.clientX,y:e.clientY,items,handle,targets:null,initial:null,before:[Math.min(...items.map(i=>i.box[0])),Math.min(...items.map(i=>i.box[1])),Math.max(...items.map(i=>i.box[0]+i.box[2])),Math.max(...items.map(i=>i.box[1]+i.box[3]))]};
 });
-stage.addEventListener('pointermove',e=>{if(!gesture)return;const g=gesture,dx=e.clientX-g.x,dy=e.clientY-g.y;if(g.pan){pan=[g.pan[0]+dx,g.pan[1]+dy];fitBoard();return}if(Math.abs(dx)+Math.abs(dy)<3&&!g.moved)return;g.moved=true;
+stage.addEventListener('pointermove',e=>{if(!gesture)return;const g=gesture,dx=e.clientX-g.x,dy=e.clientY-g.y;if(g.pan){pan=[g.pan[0]+dx,g.pan[1]+dy];fitBoard();return}if(Math.abs(dx)+Math.abs(dy)<3&&!g.moved)return;if(!g.moved){g.initial=JSON.stringify(project);g.targets=guideTargets(page(),new Set(selected));g.moved=true}
  const [l,t,r,b]=g.before;
  const assist=smartGuides&&!e.altKey;
  const {edges:[L,T,R,B],matches}=guidedBounds(g.before,Math.round(dx/scale),Math.round(dy/scale),g.handle,assist?g.targets:[],5/scale);
@@ -315,7 +367,7 @@ stage.addEventListener('pointermove',e=>{if(!gesture)return;const g=gesture,dx=e
    const [a,c,w,h]=i.box;
    const next=g.handle?[L+(a-l)*(R-L)/(r-l),T+(c-t)*(B-T)/(b-t),w*(R-L)/(r-l),h*(B-T)/(b-t)]:[a+L-l,c+T-t,w,h];
    setBox(i.n,next,device,project,page());const box=boxFor(i.n,device,project,page());actual.push(box);
-   const el=$('.nodeWrap[data-id="'+i.n.id+'"]');if(el)position(el,box);
+   const el=canvasLayers.get(i.n.id)?.wrap;if(el)position(el,box);
  }
  const rect=enclosingBox(actual);
  if(assist)drawGuides(rect,matches,g.handle,g.targets);else clearGuides();
@@ -326,11 +378,13 @@ stage.addEventListener('pointerup',()=>finishGesture());stage.addEventListener('
 document.addEventListener('dragstart',e=>{const b=e.target.closest('[data-insert]');if(b)e.dataTransfer.setData('text/plain','formstudio:'+b.dataset.insert)});
 stage.addEventListener('dragover',e=>e.preventDefault());stage.addEventListener('drop',e=>{e.preventDefault();const t=e.dataTransfer.getData('text/plain').replace('formstudio:','');if(types.includes(t)){const r=$('#sheet').getBoundingClientRect();variantDialog(t,[(e.clientX-r.left)/scale,(e.clientY-r.top)/scale])}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){finishGesture(true);dismiss();closeSide();return}if(e.target.closest('textarea,input,select,[contenteditable],.dialog')||$('#overlay').children.length)return;
- if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();history(!e.shiftKey)}
+ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();findInProject()}
+ else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='d'&&selected.length){e.preventDefault();layerAction('duplicate-layers')}
+ else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();history(!e.shiftKey)}
  else if(e.key.toLowerCase()==='a'&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&selected.length){e.preventDefault();arrangeDialog()}
- else if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();removeSelection()}
+ else if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();if(!selectedLayers().some(n=>n.locked))removeSelection()}
  else if(e.key==='/'){e.preventDefault();tab='Insert';render();if(innerWidth<=620)$('#library').classList.add('shown');$('#search').focus()}
- else if(selected.length&&['ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();const step=e.shiftKey?10:1;change(()=>{for(const n of page().nodes.filter(n=>selected.includes(n.id))){const b=boxFor(n,device,project,page());b[e.key==='ArrowRight'||e.key==='ArrowLeft'?0:1]+=(['ArrowLeft','ArrowUp'].includes(e.key)?-step:step);setBox(n,b,device,project,page())}})}
+ else if(selected.length&&['ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();if(selectedLayers().some(n=>n.locked))return;const step=e.shiftKey?10:1;change(()=>{for(const n of page().nodes.filter(n=>selected.includes(n.id))){const b=boxFor(n,device,project,page());b[e.key==='ArrowRight'||e.key==='ArrowLeft'?0:1]+=(['ArrowLeft','ArrowUp'].includes(e.key)?-step:step);setBox(n,b,device,project,page())}})}
 });
 new ResizeObserver(fitBoard).observe(stage);
 const styleNode=document.createElement('style');styleNode.textContent=nativeCSS;document.head.append(styleNode);

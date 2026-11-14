@@ -21,14 +21,22 @@ function deviceFiles() {
     } catch { return []; }
   }).sort((a,b) => b.modified - a.modified);
 }
-function saveDevice(document, id, expected) {
-  const prev = deviceRecord(id);
-  const raw = JSON.stringify(document);
-  if (prev && JSON.stringify(prev.document) === raw) return prev;
-  if ((prev?.revision || null) !== expected) throw Error('This project changed in another tab. Download your edits or save them as a new project.');
-  const row = {id, revision:crypto.randomUUID(), modified:Date.now(), document};
-  localStorage.setItem(filePrefix + id, JSON.stringify(row));
-  return row;
+let lastWrite=null;
+function saveDevice(document,id,expected){
+  const key=filePrefix+id,stored=localStorage.getItem(key),raw=JSON.stringify(document);
+  let revision=null,identical=false;
+  if(lastWrite?.id===id&&lastWrite.stored===stored){
+    revision=lastWrite.revision;identical=raw===lastWrite.raw;
+    if(identical)return {id,revision,modified:lastWrite.modified,document};
+  }else if(stored){
+    const prior=JSON.parse(stored);revision=prior.revision;
+    if(JSON.stringify(prior.document)===raw)return prior;
+  }
+  if(revision!==expected)throw Error('This project changed in another tab. Download your edits or save them as a new project.');
+  const row={id,revision:crypto.randomUUID(),modified:Date.now()};
+  const encoded=JSON.stringify(row).slice(0,-1)+',"document":'+raw+'}';
+  localStorage.setItem(key,encoded);lastWrite={...row,stored:encoded,raw};
+  return {...row,document};
 }
 function restoreDevice() {
   let tabId;
@@ -69,7 +77,7 @@ function filesDialog() {
   let rows=[], message='';
   try { rows=deviceFiles(); } catch { message='Device storage unavailable. Download a backup.'; }
   const list=rows.map(row=>'<button class="fileRow" data-open-file="'+row.id+'"><span>'+esc(row.document.name)+'</span><small>'+(row.id===activeFileId?'Current project':'Open')+'</small></button>').join('');
-  modal('Files','<div class="fileActions">'+btn('new-file','New project','plus','btn primary')+btn('import','Import JSON','page')+btn('project-code','Project code','code')+'</div><h3>On this device</h3><p>Edits save automatically in this browser. Clearing site data removes these copies.</p>'+esc(message)+'<div class="fileList">'+list+'</div><div class="fileActions">'+btn('rename-file','Rename current')+btn('copy-file','Save a copy')+btn('json','Download project JSON')+'</div><h3>My cloud projects</h3><p>Save a private copy in your personal Supabase and open it on another device.</p>'+btn('cloud',studioSession?'Open cloud projects':'Sign in / Create account','library')+'<p id="cloudNote" role="status"></p>');
+  modal('Files','<div class="fileActions">'+btn('new-file','New project','plus','btn primary')+btn('import','Import JSON','page')+btn('merge-design','Add another project','layers')+btn('project-code','Project code','code')+btn('find-project','Find in project','search')+'</div><h3>On this device</h3><p>Edits save automatically in this browser. Clearing site data removes these copies.</p>'+esc(message)+'<div class="fileList">'+list+'</div><div class="fileActions">'+btn('rename-file','Rename current')+btn('copy-file','Save a copy')+btn('json','Download project JSON')+'</div><h3>My cloud projects</h3><p>Save a private copy in your personal Supabase and open it on another device.</p>'+btn('cloud',studioSession?'Open cloud projects':'Sign in / Create account','library')+'<p id="cloudNote" role="status"></p>');
   for (const el of $$('.dialog [data-open-file]')) el.onclick=()=>{try {
     if (el.dataset.openFile===activeFileId) {dismiss();return}
     if (!write()) return;

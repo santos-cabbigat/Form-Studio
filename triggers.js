@@ -1,11 +1,12 @@
 'use strict';
 
-const triggerLabels={click:'Click / tap',enter:'Press Enter',change:'Value changed',open:'Open window',close:'Close window',go:'Go to screen',expand:'Show / expand',collapse:'Hide / collapse',toggle:'Toggle visibility',saveRow:'Save to sample table',saveValue:'Save a preview value',copyValue:'Set another field',passwordDemo:'Simulate password update',clearFields:'Clear chosen fields',message:'Show a message',loadValue:'Read a preview value',pickerAction:'Control a picker',customDemo:'Custom action (simulation)'};
+const triggerLabels={click:'Click / tap',enter:'Press Enter',change:'Value changed',open:'Open window',close:'Close window',go:'Go to screen',expand:'Show / expand',collapse:'Hide / collapse',toggle:'Toggle visibility',saveRow:'Save to sample table',saveValue:'Save a preview value',copyValue:'Set another field',passwordDemo:'Simulate password update',clearFields:'Clear chosen fields',message:'Show a message',loadValue:'Read a preview value',pickerAction:'Control a picker',developer:'Developer action',customDemo:'Custom action (simulation)'};
 const saveTypes=['saveRow','saveValue','copyValue','passwordDemo'];
 function triggerOK(a){
   if(!a||!['click','enter','change'].includes(a.event)||!Object.hasOwn(triggerLabels,a.action)||['click','enter','change'].includes(a.action))return false;
   const id=s=>typeof s==='string'&&/^[a-z][a-z0-9_-]*$/i.test(s);
   const string=s=>typeof s==='string'&&s.trim().length>0;
+  if(a.action==='developer')return string(a.key)&&/^[a-z][a-z0-9_.-]{0,79}$/i.test(a.key);
   if(a.action==='saveRow')return id(a.target)&&Array.isArray(a.fields)&&a.fields.every(f=>f===''||id(f))&&typeof a.message==='string'&&(!a.columns||Array.isArray(a.columns)&&a.columns.length===a.fields.length&&a.columns.every(string));
   if(a.action==='clearFields')return Array.isArray(a.fields)&&a.fields.length>0&&a.fields.every(id);
   if(a.action==='saveValue'||a.action==='loadValue')return id(a.target)&&string(a.key);
@@ -52,6 +53,7 @@ function targetChoices(action) {
 }
 function describeTrigger(a){
   const target=targetChoices(a.action).find(([id])=>id===a.target)?.[1]||'Choose a target';
+  if(a.action==='developer')return 'Developer action · '+a.key;
   if(a.action==='clearFields')return 'Clear '+a.fields.map(id=>page().nodes.find(n=>n.id===id)?.name||'missing field').join(', ');
   if(a.action==='saveValue')return 'Save '+target+' as “'+a.key+'” for this run';
   if(a.action==='loadValue')return 'Read “'+a.key+'” into '+target;
@@ -65,7 +67,7 @@ function triggerSelect(id,title,choices,value,placeholder='Choose…'){
 function triggerForm(old={}){
   const events=[['click',triggerLabels.click],['enter',triggerLabels.enter]];
   if(sel()?.type==='Input'||old.event==='change')events.push(['change',triggerLabels.change]);
-  const menu=[['save','Save…'],['clearFields','Clear…'],['pickerAction','Control a picker…'],['message','Show a message'],['loadValue','Read a preview value'],['customDemo','Custom action (simulation)'],...['open','close','go','expand','collapse','toggle'].map(k=>[k,triggerLabels[k]])];
+  const menu=[['save','Save…'],['clearFields','Clear…'],['pickerAction','Control a picker…'],['message','Show a message'],['loadValue','Read a preview value'],['customDemo','Custom action (simulation)'],['developer','Developer action…'],...['open','close','go','expand','collapse','toggle'].map(k=>[k,triggerLabels[k]])];
   return field('When','<select id="ev">'+options(events,old.event||'click')+'</select>')+
     triggerSelect('ac','What should happen?',menu,saveTypes.includes(old.action)?'save':old.action,'Choose an action')+'<div id="targetArea"></div>';
 }
@@ -79,6 +81,7 @@ function wireTargets(old={}){
     const key=()=>field('Name of preview value','<input id="previewKey" placeholder="e.g. Preferred account" value="'+esc(current.key||'')+'">');
     const hint=text=>'<p class="hint">'+esc(text)+'</p>';
     if(!action||action==='close'){el.innerHTML='';return}
+    if(action==='developer'){el.innerHTML=field('Action name','<input id="developerKey" maxlength="80" placeholder="e.g. calculate-total" value="'+esc(current.key||'')+'">')+hint('This event is ready for custom logic in the exported source ZIP.');return}
     if(action==='message'||action==='customDemo'){el.innerHTML=msg(action==='message'?'Message to show':'Describe the simulated result',action==='message'?'Saved.':'')+(action==='customDemo'?hint('Preview shows this result when the trigger runs.'):'');return}
     if(action==='clearFields'){
       el.innerHTML='<fieldset class="triggerFields"><legend>Which fields should clear?</legend>'+inputsOnPage(true).map(n=>'<label><input type="checkbox" data-clear-field="'+n.id+'" '+(current.fields?.includes(n.id)?'checked':'')+'>'+esc(n.name)+'</label>').join('')+'</fieldset>';
@@ -113,6 +116,7 @@ function readTrigger(){
   if(action==='saveRow'){if(!target)throw Error('Choose the destination table.');a=readSaveRow(a)}
   if(action==='clearFields')a.fields=$$('[data-clear-field]:checked').map(e=>e.dataset.clearField);
   if(action==='saveValue'||action==='loadValue')a.key=val('#previewKey');
+  if(action==='developer'){a.key=val('#developerKey');if(!triggerOK(a))throw Error('Start the action name with a letter. Use letters, numbers, dots, dashes or underscores.');}
   if(action==='copyValue'){a.source=val('#source');if(target&&a.source===target)throw Error('Choose a different destination field.')}
   if(action==='pickerAction')a.operation=val('#operation');
   if(['message','customDemo','passwordDemo'].includes(action))a.message=val('#triggerMessage');

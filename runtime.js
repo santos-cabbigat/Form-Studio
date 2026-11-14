@@ -88,9 +88,12 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
    for(const el of root.querySelectorAll('[data-type="Table"]'))if(el.dataset.id===a.target)el.innerHTML=tableMarkup(table,records.get(a.target));
    if(a.message)notify(a.message);return true;
  }
- function applyDataAction(a,board){
+ function applyDataAction(a,board,activeLayerId,activeEvent){
    const n=nodes.get(a.target);
    if(a.action==='saveRow')return saveRow(a,board);
+   if(a.action==='developer'){
+     document.dispatchEvent(new CustomEvent('formstudio:action',{detail:{name:a.key,screenId:board.dataset.pageId,layerId:activeLayerId,event:activeEvent}}));return true;
+   }
    if(a.action==='message'||a.action==='customDemo'){notify(a.message);return true}
    if(a.action==='clearFields'){
      const targets=a.fields.map(id=>[nodes.get(id),element(id,board)]);
@@ -121,7 +124,7 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
  function device(){return forcedDevice||(window.innerWidth<600?'phone':window.innerWidth<1040?'tablet':'laptop')}
  function paint(page,target,available){
  const d=device(),[w,h]=bounds(page,d,p);const zoom=Math.min(1,available/w);
- const board=document.createElement('section');board.className='board';board.style.cssText='width:'+w+'px;height:'+h+'px;transform:scale('+zoom+');';board.style.background=p.theme.background;
+ const board=document.createElement('section');board.className='board';board.dataset.pageId=page.id;board.style.cssText='width:'+w+'px;height:'+h+'px;transform:scale('+zoom+');';board.style.background=p.theme.background;
  const outer=document.createElement('div');outer.className='sized';outer.style.width=w*zoom+'px';outer.style.height=h*zoom+'px';outer.append(board);target.replaceChildren(outer);
  page.nodes.filter(n=>!n.hide?.[d]).forEach(n=>{
  let el=makeEl(n,boxFor(n,d,p,page));board.append(el);if(hidden.has(n.id))el.style.visibility='hidden';
@@ -144,7 +147,7 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
    const feedback={saving:'Saving…',failed:'Save failed. Try again.',offline:'Offline. Your entry is still here.'};
    notify(a.feedback?.[response]||feedback[response],response==='saving');return;
  }
- if(!applyDataAction(a,board))return;
+ if(!applyDataAction(a,board,n.id,event))return;
  const page=p.pages.find(q=>q.id===a.target);
  if(a.action==='open'&&page?.kind==='window'){shown=page;show()}
  if(a.action==='close')closeWindow();

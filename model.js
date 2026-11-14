@@ -29,7 +29,7 @@ function boxFor(n,device,p,page){
 }
 function setBox(n,b,d,p,page){
  const base=page.kind==='window'?Math.min(page.width,devices[d][0]-24):devices[d][0], actual=page.kind==='window'?Math.min(page.width,p.widths[d]-24):p.widths[d];
- n.boxes[d]=[Math.round(b[0]*base/actual),Math.round(b[1]),Math.max(8,Math.round(b[2]*base/actual)),Math.max(8,Math.round(b[3]))];
+ n.boxes[d]=[Math.round(b[0])*base/actual,Math.round(b[1]),Math.max(8,Math.round(b[2]))*base/actual,Math.max(8,Math.round(b[3]))];
 }
 function createItem(type,variant){
  let n=node(type,{Button:'Continue',Text:variant==='Heading'?'New heading':'Your text here',Input:variant,Image:'Image',Table:'Ledger table',Shape:variant,Module:variant,Custom:'Custom component'}[type]);

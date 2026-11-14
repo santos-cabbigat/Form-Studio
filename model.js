@@ -8,7 +8,7 @@ const cap=x=>x[0].toUpperCase()+x.slice(1);
 const categoryIcon=t=>({Heading:'text',Custom:'code'}[t]||t.toLowerCase());
 const families=['Arial, sans-serif','Georgia, serif','Verdana, sans-serif','monospace'];
 const defaultColors=['#7545D6','#442881','#EAE1FF','#22202A','#FFFFFF'];
-const variants={Button:['Solid','Outline','Pill'],Text:['Heading','Paragraph','Caption'],Input:['Email','Password','Text'],Image:['Artwork','Upload image'],Module:['Card','Panel','Outline'],Window:['Dialog','Wide dialog','Blank window'],Table:['Ledger','Simple'],Shape:['Rectangle','Circle','Oval']};
+const variants={Button:['Solid','Outline','Pill'],Text:['Heading','Paragraph','Caption'],Input:['Text','Dropdown','Number','Email','Password'],Image:['Artwork','Upload image'],Module:['Card','Panel','Outline'],Window:['Dialog','Wide dialog','Blank window'],Table:['Ledger','Simple'],Shape:['Rectangle','Circle','Oval']};
 function makePage(name,kind='screen',width=460){return {id:uid(),name,kind,width,height:kind==='window'?310:null,nodes:[]}}
 function node(type,text,box,props={}) {
  const small={Button:[170,44],Text:[200,34],Input:[230,48],Image:[180,150],Module:[220,145],Table:[280,145],Shape:[110,90],Custom:[200,80]};
@@ -37,7 +37,7 @@ function createItem(type,variant){
  if(type==='Button'&&variant==='Outline'){Object.assign(n.style,{fill:'transparent',color:'var(--accent)',border:'1px solid var(--accent)'})}
  if(type==='Button'&&variant==='Pill')n.style.radius=99;
  if(type==='Text')Object.assign(n.style,{fontSize:variant==='Heading'?30:variant==='Caption'?12:16,weight:variant==='Heading'?700:400});
- if(type==='Input'){n.inputType=variant.toLowerCase();n.text=variant==='Email'?'you@example.com':variant==='Password'?'Enter password':'Type here';n.style.fill='#FFFFFF'}
+ if(type==='Input'){n.inputType=variant==='Dropdown'?'select':variant.toLowerCase();if(variant==='Dropdown')n.choices='Option A\nOption B\nOption C';n.text=variant==='Email'?'you@example.com':variant==='Password'?'Enter password':variant==='Dropdown'?'Choose an option':variant==='Number'?'Enter a number':'Type here';n.style.fill='#FFFFFF'}
  if(type==='Shape'&&variant!=='Rectangle'){n.style.radius=999;if(variant==='Circle')n.boxes.laptop[3]=n.boxes.laptop[2]}
  if(type==='Image')n.src=studioArt;
  if(type==='Table'){n.rows=variant==='Ledger'?'Account | Debit | Credit\nCash | 200 | —\nSales | — | 200':'Item | Value\nFirst item | 100\nSecond item | 200';n.style.fill='#FFFFFF'}

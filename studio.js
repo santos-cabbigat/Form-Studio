@@ -1,8 +1,8 @@
 'use strict';
 const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
-const key='formstudio.workspace.v1',tabs=['Insert','Triggers','Layers','Palette','Theme'];
-let project=intro(),storageOK=true, loadNote='';
-try{const saved=localStorage.getItem(key);if(saved){const q=JSON.parse(saved);if(q.format==='form-studio'&&q.pages?.length)project=q;else loadNote='Saved project could not be loaded.'}}catch{storageOK=false;loadNote='Device storage is unavailable. Export a project copy.'}
+const tabs=['Insert','Triggers','Layers','Palette','Theme'];
+let project,storageOK=true,loadNote='';
+try{project=restoreDevice()}catch(e){project=intro();activeFileId=crypto.randomUUID();deviceRevision=null;storageOK=false;loadNote='Device project could not be opened. '+e.message}
 let pageId=project.pages[0].id,device='laptop',tab='Insert',mode='design',selected=[project.pages[0].nodes.at(-1)?.id].filter(Boolean),zoomFactor=1,pan=[0,0],panMode=false,scale=1,search='',past=[],future=[],gesture=null,toastTimer,codeDirty=false,multi=false;
 const page=()=>project.pages.find(v=>v.id===pageId)||project.pages[0];
 const sel=()=>page().nodes.find(n=>n.id===selected.at(-1));
@@ -10,10 +10,10 @@ const btn=(cmd,label,ic='',cl='btn')=>'<button class="'+cl+'" data-cmd="'+cmd+'"
 const options=(items,value)=>items.map(t=>{const [v,l]=Array.isArray(t)?t:[t,t];return '<option value="'+esc(v)+'" '+(v===value?'selected':'')+'>'+esc(l)+'</option>'}).join('');
 const field=(label,html)=>'<label class="field">'+esc(label)+html+'</label>';
 const prop=(k,v,type='text')=>'<input data-prop="'+k+'" type="'+type+'" value="'+esc(v)+'">';
-const names={click:'Click / tap',enter:'Press Enter',open:'Open window',close:'Close window',go:'Go to screen',expand:'Show / expand',collapse:'Hide / collapse',toggle:'Toggle visibility'};
+const names={click:'Click / tap',enter:'Press Enter',open:'Open window',close:'Close window',go:'Go to screen',expand:'Show / expand',collapse:'Hide / collapse',toggle:'Toggle visibility',saveRow:'Save row to table'};
 const actName=a=>names[a.event]+' → '+names[a.action];
 function toast(msg){$('#toast').textContent=msg;$('#toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),2500)}
-function write(){try{localStorage.setItem(key,JSON.stringify(project));storageOK=true}catch{storageOK=false;toast('Storage full or unavailable. Export a project copy.')}$('#saveStatus').textContent=storageOK?'Saved on this device':'Unsaved · export a project copy'}
+function write(){try{const row=saveDevice(project,activeFileId,deviceRevision);deviceRevision=row.revision;storageOK=true}catch(e){storageOK=false;toast(e.name==='QuotaExceededError'?'Device storage full. Download a project copy.':e.message)}$('#saveStatus').textContent=storageOK?'Saved on this device':'Unsaved · download a copy';if(storageOK)try{queueCloud()}catch{}return storageOK}
 function remember(s=JSON.stringify(project)){past.push(s);if(past.length>24)past.shift();future=[]}
 function change(fn,msg){remember();fn();clean();write();render();if(msg)toast(msg)}
 function clean(){if(!project.pages.some(p=>p.id===pageId))pageId=project.pages[0].id;selected=selected.filter(id=>page().nodes.some(n=>n.id===id))}
@@ -49,7 +49,7 @@ function drawLibrary(){
  const match=t=>t.toLowerCase().includes(search.toLowerCase());
  pane='<div class="libTop"><h2>Component library</h2><label class="search">'+icon('search',14)+'<input id="search" placeholder="Find a component" aria-label="Find a component" value="'+esc(search)+'"><kbd>/</kbd></label></div>';
  const cards=types.filter(match);pane+=section('Elements',cards.length?'<div class="cardGrid">'+cards.map(t=>'<button class="component" data-insert="'+t+'" draggable="true">'+icon(categoryIcon(t),19)+'<span>'+t+'</span></button>').join('')+'</div>':'<span class="hint">No matching elements.</span>');
- pane+=section('Screen templates',[['signin','Sign-in screen','page',''],['ledger','Account ledger','table','mint'],['blank','Blank screen','insert','sand']].filter(a=>match(a[1])).map(a=>preset(...a)).join(''));
+ pane+=section('Screen templates',[['signin','Sign-in screen','page',''],['ledger','Account ledger','table','mint'],['sample-entry','Sample entry form','input','mint'],['linked-entry','Entry & ledger tabs','table','mint'],['blank','Blank screen','insert','sand']].filter(a=>match(a[1])).map(a=>preset(...a)).join(''));
  pane+=section('My templates',templateRows(search)+btn('new-template','Add template','plus','addTemplate'));
  }else if(tab==='Layers'){
  pane='<div class="panel"><h2>Layers</h2>'+field('Screen or window','<select id="pageSelect">'+options(project.pages.map(p=>[p.id,p.name]),pageId)+'</select>')+
@@ -73,7 +73,7 @@ function drawProps(){
  else if(selected.length>1){body=groupPanel()}
  else{
  const b=boxFor(n,device,project,page());
- body='<div class="part"><div class="typeLine"><span class="typeIcon">'+icon(categoryIcon(n.type),17)+'</span><div><strong>'+esc(n.type)+'</strong><small>Selected element</small></div></div>'+field('Layer name',prop('name',n.name))+(['Button','Text','Input'].includes(n.type)?field(n.type==='Input'?'Placeholder':'Label',prop('text',n.text)):'')+(n.type==='Table'?field('Rows · separate cells with |','<textarea data-prop="rows">'+esc(n.rows)+'</textarea>'):'')+(n.type==='Image'?btn('replace-image','Replace image','image','btn smallBtn'):'')+'</div>';
+ body='<div class="part"><div class="typeLine"><span class="typeIcon">'+icon(categoryIcon(n.type),17)+'</span><div><strong>'+esc(n.type)+'</strong><small>Selected element</small></div></div>'+field('Layer name',prop('name',n.name))+(['Button','Text','Input'].includes(n.type)?field(n.type==='Input'?'Placeholder':'Label',prop('text',n.text)):'')+dataInspector(n)+(n.type==='Image'?btn('replace-image','Replace image','image','btn smallBtn'):'')+'</div>';
  body+='<div class="part"><h3>Position & size</h3><div class="grid2">'+['X','Y','W','H'].map((k,i)=>'<label class="dim">'+k+'<input type="number" aria-label="'+k+'" data-box="'+i+'" value="'+b[i]+'"></label>').join('')+'</div></div>';
  body+='<div class="part"><h3>Appearance</h3>'+colorControl('Fill','fill',n.style.fill)+colorControl('Text','color',n.style.color)+'<label class="propRow">Corner radius<span class="dim" style="width:102px"><input type="number" min="0" data-style="radius" value="'+n.style.radius+'">px</span></label><label class="propRow">Font size<span class="dim" style="width:102px"><input type="number" min="1" data-style="fontSize" value="'+n.style.fontSize+'">px</span></label></div>';
  body+='<div class="part"><h3>Interactions</h3>'+(n.actions.length?n.actions.map((a,i)=>'<button class="actLine" data-editaction="'+i+'">'+icon('triggers',14)+actName(a)+'</button>').join(''):btn('add-action','Add trigger','triggers','btn smallBtn'))+'</div><div class="part">'+btn('save-selected','Save as template','library','btn full')+'</div>'
@@ -84,7 +84,7 @@ function drawProps(){
 function colorControl(label,k,v){const actual=v==='var(--accent)'?project.theme.accent:/^#[a-f\d]{6}$/i.test(v)?v:'#ffffff';return '<div class="colorRow"><span>'+label+'</span><label class="colorBox"><input type="color" aria-label="'+label+'" data-style="'+k+'" value="'+actual+'">'+esc(v==='var(--accent)'?actual.toUpperCase():v)+'</label>'+colorPickButton(k,label)+'</div>'}
 function sourceFor(n){
  const b=boxFor(n,device,project,page()), selector='#'+n.id, rules=Object.entries(cssProps(n,b)).map(([k,v])=>'  '+k+': '+v+';').join('\n');
- let html=n.type==='Custom'?'<!-- Embedded component -->\n'+n.html:markup(n).replace(/^<(\w+)/,'<$1 id="'+n.id+'"');
+ let html=n.type==='Custom'?'<!-- Embedded component -->\n'+n.html:markup(n,true).replace(/^<(\w+)/,'<$1 id="'+n.id+'"');
  const actions='<script type="application/json" data-triggers>\n'+JSON.stringify(n.actions,null,2).replace(/</g,'\\u003c')+'\n</script>';
  return '<style data-layout>\n'+selector+' {\n'+rules+'\n}\n</style>\n'+html+'\n'+actions
 }
@@ -108,20 +108,20 @@ function readStyles(n,st,box){
 }
 function parseElement(n,code){
  const draft=clone(n),b=boxFor(n,device,project,page()),doc=new DOMParser().parseFromString(code,'text/html');
- const actionBlock=doc.querySelector('script[data-triggers]');if(actionBlock){const a=JSON.parse(actionBlock.textContent);if(!Array.isArray(a)||a.some(v=>!['click','enter'].includes(v.event)||!['open','close','go','expand','collapse','toggle'].includes(v.action)||(v.action!=='close'&&!targetChoices(v.action).some(t=>t[0]===v.target))))throw Error('Use a supported event, action, and target in the trigger list.');draft.actions=a;actionBlock.remove()}else draft.actions=[];
+ const actionBlock=doc.querySelector('script[data-triggers]');if(actionBlock){const a=JSON.parse(actionBlock.textContent);if(!Array.isArray(a)||a.some(v=>!['click','enter'].includes(v.event)||!['open','close','go','expand','collapse','toggle','saveRow'].includes(v.action)||(v.action!=='close'&&!targetChoices(v.action).some(t=>t[0]===v.target))))throw Error('Use a supported event, action, and target in the trigger list.');draft.actions=a;actionBlock.remove()}else draft.actions=[];
  const layout=doc.querySelector('style[data-layout]');draft.extraCSS={};
  if(layout){const rules=declarations(layout.textContent);if(rules.length!==1||!rules[0].style)throw Error('Keep one layout rule for the selected element.');readStyles(draft,rules[0].style,b);layout.remove()}
  if(n.type==='Custom'){draft.html=code.replace(/<style\b[^>]*\bdata-layout\b[^>]*>[\s\S]*?<\/style>/i,'').replace(/<script\b[^>]*\bdata-triggers\b[^>]*>[\s\S]*?<\/script>/i,'').replace('<!-- Embedded component -->','').trim();if(!draft.html)throw Error('Enter component markup.')}
  else{
  if(doc.querySelector('script,iframe,object,embed,link'))throw Error('Use My templates → Embedded HTML for a self-contained widget.');
- const el=doc.body.firstElementChild,tags={Text:'DIV',Button:'BUTTON',Input:'INPUT',Table:'DIV',Image:'IMG',Module:'DIV',Shape:'DIV'};
+ const el=doc.body.firstElementChild,tags={Text:'DIV',Button:'BUTTON',Input:n.inputType==='select'?'SELECT':'INPUT',Table:'DIV',Image:'IMG',Module:'DIV',Shape:'DIV'};
  if(!el||el.tagName!==tags[n.type]||doc.body.children.length!==1)throw Error('Keep the '+tags[n.type].toLowerCase()+' root, or import this as an embedded template.');
  for(const style of doc.querySelectorAll('style'))for(const r of declarations(style.textContent)){if(!r.style||!el.matches(r.selectorText))throw Error('Embedded HTML supports multi-element styles.');readStyles(draft,r.style,b)}
  readStyles(draft,el.style,b);
  if(['Button','Text'].includes(n.type)){if(el.children.length)throw Error('Embedded HTML preserves nested markup.');draft.text=el.textContent}
- if(n.type==='Input'){draft.text=el.placeholder;draft.inputType=el.type;draft.name=el.getAttribute('aria-label')||n.name}
+ if(n.type==='Input'){draft.name=el.getAttribute('aria-label')||n.name;draft.requirement=el.required?'required':'optional';if(el.tagName==='SELECT'){const opts=[...el.options];draft.text=opts.find(o=>!o.value)?.textContent||'';draft.choices=opts.filter(o=>o.value).map(o=>o.textContent+' | '+o.value).join('\n')}else{draft.text=el.placeholder;draft.inputType=el.type}}
  if(n.type==='Image'){if(!/^data:image\/(png|jpeg|webp|gif);base64,/i.test(el.getAttribute('src')||''))throw Error('Use an embedded PNG, JPEG, GIF, or WebP image.');draft.src=el.getAttribute('src')}
- if(n.type==='Table')draft.rows=[...el.querySelectorAll('tr')].map(r=>[...r.cells].map(c=>c.textContent).join(' | ')).join('\n')
+ if(n.type==='Table'){draft.rows=[...el.querySelectorAll('tr:not([data-empty])')].map(r=>[...r.cells].map(c=>c.textContent).join(' | ')).join('\n');draft.initialState=el.dataset.start||'sample';draft.emptyMessage=el.dataset.empty??n.emptyMessage}
  }
  setBox(draft,b,device,project,page());return draft
 }
@@ -130,9 +130,9 @@ function insertNode(n,at){
  change(()=>{pg.nodes.push(n);selected=[n.id]});dismiss();closeSide()
 }
 function addScreen(type){
- let p=type==='signin'?intro().pages[0]:makePage(type==='ledger'?'Account ledger':'Untitled screen');
+ let p=['sample-entry','linked-entry'].includes(type)?sampleEntryScreen():type==='signin'?intro().pages[0]:makePage(type==='ledger'?'Account ledger':'Untitled screen');
  if(type==='ledger'){p.nodes=[node('Text','Account ledger',[36,40,380,46]),node('Button','Find account',[690,40,225,46]),createItem('Table','Ledger')];Object.assign(p.nodes[0].style,{fontSize:32,weight:700});p.nodes[2].boxes.laptop=[36,124,879,284]}
- change(()=>{if(type==='signin'){const w=intro().pages[1];p.nodes.at(-1).actions[0].target=w.id;project.pages.push(w)}project.pages.push(p);pageId=p.id;selected=[];pan=[0,0];zoomFactor=1});closeSide();dismiss();if(type==='blank')pageSettings()
+ change(()=>{if(type==='linked-entry'){const ledger=makePage('Ledger');p.name='Entry';const table=p.nodes.pop();table.boxes.laptop=[36,104,800,420];table.boxes.phone=[20,80,350,490];const title=node('Text','Ledger',[36,28,640,53]);title.style.fontSize=32;title.boxes.phone=[20,18,350,44];ledger.nodes=[title,table];project.pages.push(p,ledger);pageId=p.id;selected=[];pan=[0,0];zoomFactor=1;return}if(type==='signin'){const w=intro().pages[1];p.nodes.at(-1).actions[0].target=w.id;project.pages.push(w)}project.pages.push(p);pageId=p.id;selected=[];pan=[0,0];zoomFactor=1});closeSide();dismiss();if(type==='blank')pageSettings()
 }
 function variantDialog(type,at){
  modal('Insert '+type.toLowerCase(),('<p class="hint">Choose a starting design or add one of your own.</p>')+variants[type].map((v,i)=>'<button class="variant" data-variant="'+i+'"><span>'+icon(categoryIcon(type))+v+'</span>'+icon('plus',15)+'</button>').join('')+project.templates.filter(t=>t.kind==='element'&&t.node.type===type||t.kind==='block'&&type==='Module'||t.kind==='window'&&type==='Window'||t.kind==='element'&&t.category===type).map(t=>preset('use-'+t.id,t.name,'library')).join('')+btn('type-template','Add a template','plus','addTemplate'));
@@ -146,11 +146,11 @@ function pickImage(cb){const inp=document.createElement('input');inp.type='file'
 function pagesDialog(){modal('Screens & windows',project.pages.map(p=>'<button class="variant" data-page="'+p.id+'"><span>'+icon(p.kind==='window'?'window':'page')+esc(p.name)+'</span>'+icon(p.id===pageId?'check':'right',14)+'</button>').join('')+'<div class="dialogActions">'+btn('save-screen-template','Save template','library')+btn('page-settings','Edit current')+btn('blank','New screen','plus','btn primary')+'</div>')}
 function pageSettings(){const p=page();modal(p.kind==='window'?'Window settings':'Screen settings',field('Name','<input id="pgName" value="'+esc(p.name)+'">')+(p.kind==='window'?'<div class="row">'+field('Width (px)','<input id="pgWidth" type="number" min="120" max="2000" value="'+p.width+'">')+field('Height (px)','<input id="pgHeight" type="number" min="100" max="2400" value="'+p.height+'">')+'</div>':'')+'<div class="dialogActions">'+btn('dismiss','Cancel')+btn('save-page','Save','','btn primary')+'</div>')}
 function triggerForm(old={},templateMode=false){
- const ev=old.event||'click',ac=old.action||'open';return field('When','<select id="ev">'+options([['click',names.click],['enter',names.enter]],ev)+'</select>')+field('Action','<select id="ac">'+options(['open','close','go','expand','collapse','toggle'].map(k=>[k,names[k]]),ac)+'</select>')+'<div id="targetArea"></div>'
+ const ev=old.event||'click',ac=old.action||'open';return field('When','<select id="ev">'+options([['click',names.click],['enter',names.enter]],ev)+'</select>')+field('Action','<select id="ac">'+options(['open','close','go','expand','collapse','toggle','saveRow'].map(k=>[k,names[k]]),ac)+'</select>')+'<div id="targetArea"></div>'
 }
-function targetChoices(action){if(action==='open'||action==='go')return project.pages.filter(p=>p.kind===(action==='open'?'window':'screen')).map(p=>[p.id,p.name]);return page().nodes.map(n=>[n.id,n.name])}
-function wireTargets(old={}){const f=()=>{const ac=$('#ac').value,t=targetChoices(ac);$('#targetArea').innerHTML=ac==='close'?'':field('Target','<select id="target">'+options(t,old.target)+'</select>')+(ac==='open'?btn('quick-window','Create a window','plus','btn smallBtn'):'')+(t.length||ac==='close'?'':'<p class="hint">Add a target before applying.</p>')};$('#ac').onchange=f;f()}
-function readTrigger(){const event=$('#ev').value,action=$('#ac').value,target=$('#target')?.value||'';if(action!=='close'&&!target)throw Error('Choose a target first.');return {event,action,target}}
+function targetChoices(action){if(action==='saveRow')return tablesInProject().map(({pg,n})=>[n.id,pg.name+' / '+n.name]);if(action==='open'||action==='go')return project.pages.filter(p=>p.kind===(action==='open'?'window':'screen')).map(p=>[p.id,p.name]);return page().nodes.map(n=>[n.id,n.name])}
+function wireTargets(old={}){const f=()=>{const ac=$('#ac').value,t=targetChoices(ac);$('#targetArea').innerHTML=ac==='close'?'':field('Target','<select id="target">'+options(t,old.target)+'</select>')+(ac==='open'?btn('quick-window','Create a window','plus','btn smallBtn'):'')+(t.length||ac==='close'?'':'<p class="hint">Add a target before applying.</p>');if(ac==='saveRow'&&t.length){$('#targetArea').insertAdjacentHTML('beforeend','<div id="saveFields"></div>');$('#target').onchange=()=>saveRowSettings(old);saveRowSettings(old)}};$('#ac').onchange=f;f()}
+function readTrigger(){const event=$('#ev').value,action=$('#ac').value,target=$('#target')?.value||'';if(action!=='close'&&!target)throw Error('Choose a target first.');const a={event,action,target};return action==='saveRow'?readSaveRow(a):a}
 function actionDialog(index=null,sample=null){
  const n=sel();if(!n){toast('Select an element for this trigger.');return}
  const old=sample||n.actions[index]||{};modal('Element trigger',field('Element','<input readonly value="'+esc(n.name)+'">')+triggerForm(old)+'<div id="actionError" class="error"></div><div class="dialogActions">'+btn('store-action','Save as template')+btn('commit-action','Apply trigger','check','btn primary')+'</div>');wireTargets(old);
@@ -160,7 +160,7 @@ function actionDialog(index=null,sample=null){
 function quickWindow(){const win=makePage('New window','window');win.nodes=[node('Text','Window title',[20,30,320,44]),node('Button','Close',[20,140,150,42],{actions:[{event:'click',action:'close',target:''}]})];change(()=>project.pages.push(win));wireTargets({target:win.id});toast('Window added. Edit its size in Screens & windows.')}
 function triggerTemplate(action=null,existing=null){
  const a=action||existing?.action||{event:'click',action:'open',target:''};modal('Save trigger template',field('Template name','<input id="tplName" value="'+esc(existing?.name||names[a.action])+'">')+field('Trigger code (JSON)','<textarea rows="7" id="trCode">'+esc(JSON.stringify(a,null,2))+'</textarea>')+'<p class="hint">Use click or enter. Actions include open, close, go, expand, collapse, and toggle. Choose the target again when inserting.</p><div class="error" id="tplError"></div><div class="dialogActions">'+btn('commit-trigger-template','Save template','','btn primary')+'</div>');
- $('[data-cmd=commit-trigger-template]').onclick=()=>{try{let v=JSON.parse($('#trCode').value);if(!['click','enter'].includes(v.event)||!['open','close','go','expand','collapse','toggle'].includes(v.action))throw Error('Use one of the supported events and actions.');saveTemplate({id:existing?.id||uid(),kind:'trigger',name:requiredName(),action:{event:v.event,action:v.action,target:String(v.target||'')}})}catch(e){$('#tplError').textContent=e.message}}
+ $('[data-cmd=commit-trigger-template]').onclick=()=>{try{let v=JSON.parse($('#trCode').value);if(!['click','enter'].includes(v.event)||!['open','close','go','expand','collapse','toggle','saveRow'].includes(v.action))throw Error('Use one of the supported events and actions.');saveTemplate({id:existing?.id||uid(),kind:'trigger',name:requiredName(),action:{...v,event:v.event,action:v.action,target:String(v.target||'')}})}catch(e){$('#tplError').textContent=e.message}}
 }
 function requiredName(){let t=$('#tplName').value.trim();if(!t)throw Error('Give the template a name.');return t}
 function saveTemplate(t){change(()=>{const i=project.templates.findIndex(v=>v.id===t.id);if(i<0)project.templates.push(t);else project.templates[i]=t},'Template saved');dismiss()}
@@ -189,7 +189,7 @@ function templateDialog(existing=null,initialKind=null,category=null){
 function useTemplate(t){if(!t)return;if(t.kind==='trigger'){actionDialog(null,t.action);return}
  if(t.kind==='window'&&t.node){const w=makePage(t.name,'window',t.node.boxes.laptop[2]);w.height=t.node.boxes.laptop[3];const content=clone(t.node);content.id=uid();content.boxes.laptop[0]=0;content.boxes.laptop[1]=0;w.nodes=[content];change(()=>{project.pages.push(w);pageId=w.id;selected=[content.id]});dismiss();closeSide();return}if(t.layout){
  const layout=clone(t.layout),maps=new Map(layout.nodes.map(n=>[n.id,uid()])),groups=new Map();
- const newPageId=uid(),groupId=uid();for(const n of layout.nodes){n.id=maps.get(n.id);for(const a of n.actions){if(maps.has(a.target))a.target=maps.get(a.target);else if(a.target===layout.id)a.target=newPageId}if(t.kind==='block')n.group=groupId;else if(n.group){if(!groups.has(n.group))groups.set(n.group,uid());n.group=groups.get(n.group)}}
+ const newPageId=uid(),groupId=uid();for(const n of layout.nodes){n.id=maps.get(n.id);for(const a of n.actions){if(a.fields)a.fields=a.fields.map(id=>maps.get(id)||id);if(maps.has(a.target))a.target=maps.get(a.target);else if(a.target===layout.id)a.target=newPageId}if(t.kind==='block')n.group=groupId;else if(n.group){if(!groups.has(n.group))groups.set(n.group,uid());n.group=groups.get(n.group)}}
  change(()=>{if(t.kind==='block'){for(const n of layout.nodes){for(const b of Object.values(n.boxes)){b[0]+=12;b[1]+=12}page().nodes.push(n)}selected=layout.nodes.map(n=>n.id)}else{layout.id=newPageId;layout.name=t.name;project.pages.push(layout);pageId=layout.id;selected=[]}});dismiss();closeSide();return}
  const n=clone(t.node);n.id=uid();delete n.group;n.name=t.name;insertNode(n)}
 function manageTemplate(t){
@@ -198,26 +198,26 @@ function manageTemplate(t){
  if(!t.layout)$('[data-cmd=edit-template]').onclick=()=>{if(t.kind==='trigger')triggerTemplate(null,t);else if(t.node.type==='Custom')templateDialog(t);else modal(t.name,field('Component code','<textarea readonly rows="14">'+esc(sourceFor(t.node))+'</textarea>')+'<p class="hint">Insert a copy, edit its code, and save it as a new template.</p>')};
  $('[data-cmd=remove-template]').onclick=()=>{change(()=>project.templates=project.templates.filter(v=>v.id!==t.id));dismiss()}
 }
-function preview(d=device){
- closeSide();$('#overlay').innerHTML='<section class="previewBg" role="dialog" aria-label="Interactive preview"><div class="previewBar"><strong>'+icon('preview',15)+' Preview · '+esc(page().name)+'</strong><select id="previewDevice" aria-label="Preview device">'+options(Object.keys(devices).map(k=>[k,cap(k)+' · '+project.widths[k]+' px']),d)+'</select>'+btn('dismiss','Back to editor','close','btn smallBtn')+'</div><iframe title="Interactive design preview" sandbox="allow-scripts allow-modals"></iframe></section>';
- const frame=$('.previewBg iframe');frame.style.width=project.widths[d]+'px';frame.srcdoc=buildHTML(project,pageId,d);$('#previewDevice').onchange=e=>preview(e.target.value)
+function preview(d=device,dataState='design'){
+ closeSide();$('#overlay').innerHTML='<section class="previewBg" role="dialog" aria-label="Interactive preview"><div class="previewBar"><strong>'+icon('preview',15)+' Preview · '+esc(page().name)+'</strong><select id="previewDevice" aria-label="Preview device">'+options(Object.keys(devices).map(k=>[k,cap(k)+' · '+project.widths[k]+' px']),d)+'</select>'+(tablesInProject().length?'<select id="previewState" aria-label="Preview data">'+options([['design','As designed'],['empty','Empty tables'],['sample','Sample rows']],dataState)+'</select>':'')+btn('dismiss','Back to editor','close','btn smallBtn')+'</div><iframe title="Interactive design preview" sandbox="allow-scripts allow-modals"></iframe></section>';
+ const frame=$('.previewBg iframe');frame.style.width=project.widths[d]+'px';frame.srcdoc=buildHTML(project,pageId,d,dataState);$('#previewDevice').onchange=e=>preview(e.target.value,dataState);if($('#previewState'))$('#previewState').onchange=e=>preview(d,e.target.value)
 }
 function download(body,path,type){const url=URL.createObjectURL(new Blob([body],{type})),a=document.createElement('a');a.href=url;a.download=path;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000)}
 function exportDialog(){
- modal('Export project',preset('html','Working website · HTML','code')+'<p class="hint">Opens offline in a browser. Includes screens, window sizes, images, device layouts, theme, and supported triggers.</p>'+preset('json','Editable project · JSON','layers','mint')+'<p class="hint">Includes all designs, groups, triggers, and My templates. Import this file to continue on another device.</p><hr style="border:0;border-top:1px solid var(--line)">'+btn('import','Import project file','page','btn full'))
+ modal('Export project',preset('html','Working website · HTML','code')+'<p class="hint">Opens offline in a browser. Includes screens, window sizes, images, device layouts, theme, and supported triggers.</p>'+preset('source-zip','Project source · ZIP','code')+'<p class="hint">Separate screen and component files, connected automatically. Extract and open index.html.</p>'+preset('json','Editable project · JSON','layers','mint')+'<p class="hint">Includes all designs, groups, triggers, and My templates. Import this file to continue on another device.</p><hr style="border:0;border-top:1px solid var(--line)">'+btn('import','Import project file','page','btn full'))
 }
 function validateImport(p){
- if(p?.format!=='form-studio'||p.version!==1||!Array.isArray(p.pages)||!p.pages.some(a=>a.kind==='screen')||!Array.isArray(p.templates)||!Array.isArray(p.palette)||!p.theme||!p.name)throw Error('Choose a Form Studio project JSON file.');
+ if(p?.format!=='form-studio'||p.version!==1||!Array.isArray(p.pages)||!p.pages.some(a=>a.kind==='screen')||!Array.isArray(p.templates)||!Array.isArray(p.palette)||!p.theme||typeof p.name!=='string'||!p.name.trim())throw Error('Choose a Form Studio project JSON file.');
  const hex=c=>/^#[a-f0-9]{6}$/i.test(c), id=x=>typeof x==='string'&&/^[a-z][a-z0-9_-]*$/i.test(x);
  if(!p.palette.every(hex)||!hex(p.theme.accent)||!hex(p.theme.background)||!families.includes(p.theme.font)||Object.keys(devices).some(d=>!sizes[d].includes(p.widths?.[d])))throw Error('Project theme or device settings are invalid.');
  const checkNode=n=>{if(!n||!id(n.id)||!['Button','Text','Input','Image','Module','Shape','Table','Custom'].includes(n.type)||typeof n.name!=='string'||!n.style||!n.boxes?.laptop||!Array.isArray(n.actions)||Object.values(n.boxes).some(b=>!Array.isArray(b)||b.length!==4||b.some(v=>!Number.isFinite(v)))||n.style.radius<0||!Number.isFinite(n.style.radius)||!Number.isFinite(n.style.fontSize))throw Error('A component in the project is invalid.');
- if(n.type==='Image'&&!/^data:image\/(png|jpeg|webp|gif);base64,/i.test(n.src||''))throw Error('This project has an unsupported image source.');
- if(n.type==='Custom'&&typeof n.html!=='string')throw Error('A custom component is invalid.');if(n.type==='Table'&&typeof n.rows!=='string')throw Error('A table is invalid.');
- if(n.actions.some(a=>!['enter','click'].includes(a.event)||!['open','close','go','expand','collapse','toggle'].includes(a.action)))throw Error('An interaction is invalid.')};
+ if(n.type==='Input'&&n.choices!==undefined&&typeof n.choices!=='string')throw Error('Dropdown choices must be text.');if(n.actions.some(a=>a.action==='saveRow'&&(!Array.isArray(a.fields)||a.fields.some(k=>k!==''&&!id(k))||typeof a.message!=='string')))throw Error('A save trigger has invalid fields.');if(n.type==='Image'&&!/^data:image\/(png|jpeg|webp|gif);base64,/i.test(n.src||''))throw Error('This project has an unsupported image source.');
+ if(n.type==='Custom'&&typeof n.html!=='string')throw Error('A custom component is invalid.');if(n.type==='Table'&&(typeof n.rows!=='string'||!n.rows.split(/\r?\n/).some(line=>line.trim())))throw Error('A table is invalid.');
+ if(n.actions.some(a=>!['enter','click'].includes(a.event)||!['open','close','go','expand','collapse','toggle','saveRow'].includes(a.action)))throw Error('An interaction is invalid.')};
  for(const pg of p.pages){if(!id(pg.id)||typeof pg.name!=='string'||!Array.isArray(pg.nodes)||!['screen','window'].includes(pg.kind))throw Error('A screen definition is invalid.');if(pg.kind==='window'&&(!Number.isFinite(pg.width)||!Number.isFinite(pg.height)))throw Error('Window dimensions are invalid.');pg.nodes.forEach(checkNode)}
  p.templates.forEach(t=>{if(!id(t.id)||typeof t.name!=='string'||!['trigger','element','block','window','screen'].includes(t.kind))throw Error('A template is invalid.');if(t.node)checkNode(t.node);else if(t.layout){if(!Array.isArray(t.layout.nodes))throw Error('A template layout is invalid.');t.layout.nodes.forEach(checkNode)}else if(!t.action)throw Error('Missing trigger code.')});return p
 }
-function importFile(){const inp=document.createElement('input');inp.type='file';inp.accept='.json,application/json';inp.onchange=async()=>{try{const q=validateImport(JSON.parse(await inp.files[0].text()));modal('Open project?', '<p>Open <strong>'+esc(q.name)+'</strong> on this device? You can undo this change to return to the current project.</p><div class="dialogActions">'+btn('dismiss','Cancel')+btn('commit-import','Open project','','btn primary')+'</div>');$('[data-cmd=commit-import]').onclick=()=>{change(()=>{project=q;pageId=q.pages[0].id;selected=[]});dismiss()}}catch(e){toast(e.message)}};inp.click()}
+function importFile(){const inp=document.createElement('input');inp.type='file';inp.accept='.json,application/json';inp.onchange=async()=>{try{const q=validateImport(JSON.parse(await inp.files[0].text()));if(write())saveNewDocument(q)}catch(e){toast(e.message)}};inp.click()}
 function moveLayer(up){const n=sel();if(!n)return;const list=page().nodes,i=list.indexOf(n),j=i+(up?1:-1);if(j<0||j>=list.length)return;change(()=>[list[i],list[j]]=[list[j],list[i]])}
 function groupNodes(){if(selected.length<2){toast('Select two or more layers first.');return}let id=uid();multi=false;change(()=>page().nodes.filter(n=>selected.includes(n.id)).forEach(n=>{n.group=id;n.groupName='Layer group'}),'Elements grouped')}
 function removeSelection(){if(!selected.length)return;const ids=new Set(selected);change(()=>{page().nodes=page().nodes.filter(n=>!ids.has(n.id));for(const pg of project.pages)for(const n of pg.nodes)n.actions=n.actions.filter(a=>!ids.has(a.target));selected=[]})}
@@ -227,8 +227,8 @@ function command(c){
  switch(c){
  case 'guides':toggleSmartGuides();break;case 'arrange':arrangeDialog();break;case 'undo':history(true);break;case 'redo':history(false);break;
  case 'preview':preview();break;case 'export':exportDialog();break;case 'dismiss':dismiss();break;
- case 'apply-code':applySelection();break;case 'copy-chat':copyForChat();break;case 'select-code':selectCode();break;case 'cloud':cloudDialog();break;case 'save-selected':saveSelected();break;case 'pages':pagesDialog();break;case 'page-settings':pageSettings();break;
- case 'signin':case 'blank':case 'ledger':addScreen(c);break;
+ case 'apply-code':applySelection();break;case 'copy-chat':copyForChat();break;case 'select-code':selectCode();break;case 'project-code':codeBrowser();break;case 'source-zip':downloadSources();break;case 'files':filesDialog();break;case 'new-file':newProject();break;case 'copy-file':newProject(true);break;case 'rename-file':$('#projectName').click();break;case 'cloud':cloudDialog();break;case 'save-selected':saveSelected();break;case 'pages':pagesDialog();break;case 'page-settings':pageSettings();break;
+ case 'linked-entry':case 'sample-entry':case 'signin':case 'blank':case 'ledger':addScreen(c);break;
  case 'save-page':{const v=$('#pgName').value.trim();const w=+($('#pgWidth')?.value||460),h=+($('#pgHeight')?.value||310);if(!v||w<120||w>2000||h<100||h>2400){toast('Enter a name and valid dimensions.');break}change(()=>{page().name=v;if(page().kind==='window'){page().width=w;page().height=h}});dismiss();break}
  case 'replace-image':if(n)pickImage(src=>change(()=>n.src=src));break;
  case 'save-screen-template':saveBlock(true);break;case 'new-template':templateDialog();break;case 'add-action':actionDialog();break;case 'quick-window':quickWindow();break;case 'new-trigger':triggerTemplate();break;
@@ -313,3 +313,5 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){finishGesture(true)
 new ResizeObserver(fitBoard).observe(stage);
 const styleNode=document.createElement('style');styleNode.textContent=nativeCSS;document.head.append(styleNode);
 if(innerWidth<=620)device='phone';render();if(loadNote){$('#saveStatus').textContent=loadNote;toast(loadNote)}
+
+if(studioSession&&storageOK)try{queueCloud()}catch{}

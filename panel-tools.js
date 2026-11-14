@@ -55,12 +55,5 @@ function bindPanels(){
    main.classList.toggle('inspectorClosed',!open);panel.classList.toggle('shown',open);
    if(open)lib.classList.remove('shown');alignGrip();
  };
- $('#accountSettings').onclick=()=>{
-   const email=studioSession?.user?.email;
-   modal('Account & settings','<h3>My account</h3><p>'+esc(email||'Unlocked on this device while offline')+'</p><div class="dialogActions">'+btn('cloud',email?'My cloud projects':'Cloud sign-in')+btn('site-logout','Sign out')+'</div><h3>Editor layout</h3><p>Resize the inspector by dragging its marked edge. Dock returns it to its original width.</p><div class="dialogActions"><button class="btn" id="settingsLibrary"></button><button class="btn" id="settingsInspector"></button></div>');
-   for(const [id,control] of [['settingsLibrary','railToggle'],['settingsInspector','inspectorToggle']]){
-     const b=$('#'+id);b.textContent=$('#'+control).textContent;b.onclick=()=>{dismiss();$('#'+control).click()};
-   }
- };
  alignGrip();
 }

@@ -235,8 +235,8 @@ function resumeCloudSaves(){
  const ids=new Set([activeFileId,...Object.keys(localStorage).filter(k=>k.startsWith(prefix)).map(k=>k.slice(prefix.length))]);
  for(const id of ids)if(isFileId(id))queueCloud(1300,id);
 }
-window.addEventListener('online',()=>{if(!document.body.classList.contains('locked'))resumeCloudSaves()});
-window.addEventListener('offline',()=>{if(studioSession&&!document.body.classList.contains('locked'))refreshCloudStatus(studioSession.user.id,activeFileId)});
+window.addEventListener('online',()=>{if(document.getElementById('stage')&&!document.body.classList.contains('locked'))resumeCloudSaves()});
+window.addEventListener('offline',()=>{if(document.getElementById('stage')&&studioSession&&!document.body.classList.contains('locked'))refreshCloudStatus(studioSession.user.id,activeFileId)});
 
 async function siteLogout(){
  const token=studioSession?.access_token;

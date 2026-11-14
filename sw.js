@@ -1,7 +1,7 @@
 'use strict';
 
 // Bump with each editor shell release. Old tabs finish using their original bundle.
-const SHELL_VERSION = 'account3';
+const SHELL_VERSION = 'website4';
 const scope = new URL(self.registration.scope);
 const indexURL = new URL('index.html', scope).href;
 const cachePrefix = 'form-studio-shell:' + scope.href + ':';
@@ -17,7 +17,7 @@ function editorAsset(url) {
 function shellAssets(html) {
   // The published index is static. Preserve query strings so scripts and styles use
   // the same release as the document. The color sampler is the only lazy dependency.
-  const urls = new Set([lazyAsset]);
+  const urls = new Set([lazyAsset,new URL('settings.html',scope).href,new URL('website-settings.js?v=website4',scope).href]);
   for (const [tag] of html.matchAll(/<(?:script|link)\b[^>]*>/gi)) {
     const script = /^<script\b/i.test(tag);
     if (!script && !/\brel\s*=\s*["']stylesheet["']/i.test(tag)) continue;
@@ -42,7 +42,7 @@ async function shellComplete(cache) {
 async function publicFile(url) {
   const res = await fetch(new Request(url, {cache:'reload', credentials:'omit', redirect:'error'}));
   const mime = res.headers.get('content-type') || '';
-  if (!res.ok || res.type === 'opaque' || (url === indexURL ? !/text\/html/i.test(mime) : /text\/html/i.test(mime))) throw Error('An editor file could not be downloaded.');
+  if (!res.ok || res.type === 'opaque' || (new URL(url).pathname.endsWith('.html') ? !/text\/html/i.test(mime) : /text\/html/i.test(mime))) throw Error('An editor file could not be downloaded.');
   return res;
 }
 async function cacheShell() {
@@ -82,6 +82,9 @@ self.addEventListener('fetch', event => {
   if (request.method !== 'GET' || url.origin !== scope.origin) return;
   const landing = request.mode === 'navigate' && (url.pathname === scope.pathname || url.pathname === new URL(indexURL).pathname);
   const accountPage=request.mode==='navigate' && url.pathname===new URL('account.html',scope).pathname;
+  if(request.mode==='navigate' && url.pathname===new URL('settings.html',scope).pathname){
+    event.respondWith(fetch(request).catch(async()=>{const cache=await caches.open(cacheName);return await cache.match(new URL('settings.html',scope).href)||Response.error()}));return;
+  }
   if (accountPage){event.respondWith(fetch(request).catch(async()=>{const cache=await caches.open(cacheName);return await cache.match(indexURL)||Response.error()}));return}
   if (!landing && !editorAsset(url)) return;
   event.respondWith((async () => {

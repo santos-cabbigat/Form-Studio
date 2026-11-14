@@ -1,21 +1,64 @@
 'use strict';
 const codeDrafts=new Map(),codeDraftBases=new Map();
+const draftPrefix='formstudio.codeDraft.';
+const draftVersions=new Map(),dirtyDrafts=new Set(),draftErrors=new Map();
+let draftTimer;
 let panelSource='',codeApplyGeneration=0;
 function draftKey(){return JSON.stringify([activeFileId,pageId,device,...[...selected].sort()])}
-function dropCodeDraft(){const key=draftKey();codeDrafts.delete(key);codeDraftBases.delete(key)}
+function readDraft(key){
+ const record=JSON.parse(localStorage.getItem(draftPrefix+key));
+ if(record&&(typeof record.base!=='string'||typeof record.text!=='string'||typeof record.version!=='string'))throw Error('Unreadable code draft.');
+ return record;
+}
+function restoreDraft(key){
+ if(dirtyDrafts.has(key))return;
+ try{
+   const record=readDraft(key);
+   if(record){
+     codeDraftBases.set(key,record.base);codeDrafts.set(key,record.text);draftVersions.set(key,record.version);
+   }else{codeDrafts.delete(key);codeDraftBases.delete(key);draftVersions.delete(key)}
+ }catch{}
+}
+function dropCodeDraft(key=draftKey()){
+ if(codeDrafts.has(key)||draftVersions.has(key)){
+   try{if(readDraft(key)?.version===draftVersions.get(key))localStorage.removeItem(draftPrefix+key)}catch{}
+ }
+ dirtyDrafts.delete(key);draftErrors.delete(key);draftVersions.delete(key);codeDrafts.delete(key);codeDraftBases.delete(key);
+}
+function draftNote(key){
+ return draftErrors.get(key)||(dirtyDrafts.has(key)?'Saving code draft on this device…':'Draft saved on this device. Apply code to include these edits in the project and its cloud copy.');
+}
+function saveCodeDrafts(){
+ clearTimeout(draftTimer);
+ for(const key of dirtyDrafts){
+   try{
+     if(readDraft(key)?.version!==draftVersions.get(key))throw Error('Another tab changed this draft. Copy your text before closing or discarding it.');
+     const version=crypto.randomUUID();
+     localStorage.setItem(draftPrefix+key,JSON.stringify({base:codeDraftBases.get(key),text:codeDrafts.get(key),version}));
+     draftVersions.set(key,version);dirtyDrafts.delete(key);draftErrors.delete(key);
+   }catch(e){draftErrors.set(key,e.name==='QuotaExceededError'?'Device storage is full. Copy this code before closing.':e.message||'Draft could not be saved. Copy this code before closing.')}
+ }
+ const message=$('#draftState .hint');if(message)message.textContent=draftNote(draftKey());
+}
 function updateCodeDraft(value){
  codeApplyGeneration++;
  const key=draftKey();
  if(value===panelSource)dropCodeDraft();
  else{
    if(!codeDrafts.has(key))codeDraftBases.set(key,panelSource);
-   codeDrafts.set(key,value);
+   codeDrafts.set(key,value);dirtyDrafts.add(key);
+   clearTimeout(draftTimer);draftTimer=setTimeout(saveCodeDrafts,300);
  }
  const feedback=$('#codeError');if(feedback)feedback.replaceChildren();
  const apply=$('[data-cmd=apply-code]');if(apply)apply.disabled=false;
- $('#draftState').hidden=!codeDrafts.has(key);
+ $('#draftState').hidden=!codeDrafts.has(key);$('#draftState .hint').textContent=draftNote(key);
 }
-window.addEventListener('beforeunload',event=>{if(codeDrafts.size){event.preventDefault();event.returnValue=''}});
+window.addEventListener('pagehide',()=>{if(dirtyDrafts.size)saveCodeDrafts()});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&dirtyDrafts.size)saveCodeDrafts()});
+window.addEventListener('beforeunload',event=>{
+ if(dirtyDrafts.size)saveCodeDrafts();
+ if(dirtyDrafts.size||!storageOK){event.preventDefault();event.returnValue=''}
+});
 function selectedLayers(){
  const pg=page();
  if(!selected.length)return pg.nodes;
@@ -49,12 +92,13 @@ function selectCode(){
 }
 function codePanel(){
  const kind=selectionKind(),count=selectedLayers().length;
+ const key=draftKey();restoreDraft(key);
  panelSource=selectionSource();
  return '<section class="part codePart"><h3>'+esc(selectionTitle())+'</h3><p class="hint">'+esc(cap(kind))+' · '+count+' '+(count===1?'layer':'layers')+' · '+esc(cap(device))+'</p>'+
  btn('copy-chat','Copy for ChatGPT','code','btn primary full')+
  '<p class="hint">Edit HTML or CSS, then choose Apply code. A plain HTML block adds new layers after your selection. In screen code, paste between layer templates to insert there.</p>'+
  '<button type="button" data-cmd="expand-code" class="chip" aria-pressed="false">Expand code</button>'+
- '<textarea class="codeArea" id="elementCode" aria-label="Highlighted selection code" spellcheck="false">'+esc(codeDrafts.get(draftKey())??panelSource)+'</textarea><div id="draftState" '+(codeDrafts.has(draftKey())?'':'hidden')+'><p class="hint">Unapplied code draft for this layout. Apply before closing the editor.</p>'+btn('discard-code','Discard draft','','chip')+'</div><div id="codeError" role="alert" class="error"></div>'+
+ '<textarea class="codeArea" id="elementCode" aria-label="Highlighted selection code" spellcheck="false">'+esc(codeDrafts.get(key)??panelSource)+'</textarea><div id="draftState" '+(codeDrafts.has(key)?'':'hidden')+'><p class="hint">'+esc(draftNote(key))+'</p>'+btn('discard-code','Discard draft','','chip')+'</div><div id="codeError" role="alert" class="error"></div>'+
  '<div class="row mt">'+btn('apply-code','Apply code','check','btn')+btn('select-code','Select all','','chip')+'</div></section>'
 }
 async function copyForChat(){
@@ -78,7 +122,6 @@ async function applySelection(){
    const plan=inlinePlan(raw,nodes,kind,pg);
    const commit=()=>{
      if(!active())return;
-     dropCodeDraft();
      const added=plan.insertions.reduce((sum,c)=>sum+c.nodes.length,0);
      change(()=>{
        for(const [n,updated] of plan.updates)Object.assign(n,updated);
@@ -91,6 +134,12 @@ async function applySelection(){
        if(kind==='group'&&added)selected=pg.nodes.filter(n=>n.group===nodes[0].group).map(n=>n.id);
        else if(kind==='element'&&added)selected=[plan.insertions[0].nodes[0].id];
      },added?'Added '+countText(added)+' from code':'Code applied');
+     if(storageOK){
+       dropCodeDraft(key);
+       if(key===draftKey()&&$('#elementCode')){
+         $('#elementCode').value=panelSource;$('#draftState').hidden=true;
+       }
+     }
    };
    if(!plan.insertions.length){commit();return}
    button.disabled=true;status.textContent='Checking pasted HTML for laptop, tablet and phone…';

@@ -8,9 +8,18 @@ function keepSession(s){studioSession=s;try{if(s)sessionStorage.setItem(sessionK
 async function api(path,method='GET',body=null,token=null,prefer=null){
  const headers={apikey:studioPublicKey,'Content-Type':'application/json'};
  if(token)headers.Authorization='Bearer '+token;if(prefer)headers.Prefer=prefer;
- const res=await fetch(personalApi+path,{method,headers,body:body===null?undefined:JSON.stringify(body),cache:'no-store',referrerPolicy:'no-referrer'});
- const text=await res.text();let data;try{data=text?JSON.parse(text):null}catch{throw Error('Supabase returned an unreadable response.')}
- if(!res.ok){if(res.status===409)throw Error('A newer cloud copy exists. Open it first. Your device edits will be kept as a separate copy.');const err=Error(data?.msg||data?.message||data?.error_description||'Supabase request failed ('+res.status+').');err.code=data?.error_code;throw err}
+ const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),25000);
+ let res,text;
+ try{
+   res=await fetch(personalApi+path,{method,headers,body:body===null?undefined:JSON.stringify(body),cache:'no-store',referrerPolicy:'no-referrer',signal:controller.signal});
+   text=await res.text();
+ }catch{throw Object.assign(Error('Could not reach Supabase. Check your connection.'),{retryable:true})}
+ finally{clearTimeout(timeout)}
+ let data;try{data=text?JSON.parse(text):null}catch{throw Object.assign(Error('Supabase returned an unreadable response.'),{retryable:res.status>=500||res.ok})}
+ if(!res.ok){
+   const err=Error(data?.msg||data?.message||data?.error_description||'Supabase request failed ('+res.status+').');
+   Object.assign(err,{status:res.status,code:data?.error_code,retryable:[408,429].includes(res.status)||res.status>=500});throw err;
+ }
  return data
 }
 let refreshInFlight=null;
@@ -35,18 +44,39 @@ function cloudBase(owner,id){
  const key='formstudio.cloud.base.'+owner+'.'+id;
  return JSON.parse(localStorage.getItem(key)) || {revision:id===legacyFileId?localStorage.getItem('formstudio.cloud.revision.'+owner):null};
 }
-function markCloud(owner,id,revision,deviceRevision){
- localStorage.setItem('formstudio.cloud.base.'+owner+'.'+id,JSON.stringify({revision,deviceRevision}));
+function saveCloudBase(owner,id,base){localStorage.setItem('formstudio.cloud.base.'+owner+'.'+id,JSON.stringify(base))}
+function markCloud(owner,id,revision,deviceRevision){saveCloudBase(owner,id,{revision,deviceRevision})}
+const conflictMessage='The cloud project changed. Open its latest version below. Your local edits will be kept as a separate project.';
+function refreshCloudStatus(owner=studioSession?.user.id,id=activeFileId){
+ if(!owner||id!==activeFileId||!storageOK||studioSession?.user.id!==owner)return;
+ const base=cloudBase(owner,id),status=$('#saveStatus');
+ if(!base.revision&&!base.requested&&!base.attempt)return;
+ if(base.conflict)status.textContent='Saved on device · cloud conflict';
+ else if(base.deviceRevision===deviceRevision)status.textContent='Saved on this device and in cloud';
+ else if(base.manualRevision&&!base.snapshot&&base.manualRevision!==deviceRevision)status.textContent='Saved on device · save new version to cloud';
+ else if(base.snapshot&&base.snapshot.revision!==deviceRevision)status.textContent='Saved on device · earlier version queued for cloud';
+ else if(!base.requested&&!autoEnabled(owner,id))status.textContent='Saved on device · manual cloud save';
+ else status.textContent=navigator.onLine?'Saved on device · cloud pending':'Saved on device · cloud pending until online';
 }
 function cloudDialog() {
  if (cloudBusy) return;
  if (!studioSession) { accountDialog();return; }
  const email=studioSession.user.email;
  modal('My cloud projects','<p>Signed in as <strong>'+esc(email)+'</strong></p><div class="fileActions">'+btn('cloud-save','Save current project to cloud','','btn primary')+btn('files','Files')+'</div><label><input id="cloudAuto" type="checkbox" '+(autoEnabled(studioSession.user.id,activeFileId)?'checked':'')+'> Automatically save edits after the first cloud save</label><div id="cloudList" class="fileList"></div><p id="cloudNote" role="status">Loading projects…</p>'+btn('sign-out','Sign out','','chip'));
- $('#cloudAuto').onchange=e=>{localStorage.setItem(autoKey(studioSession.user.id,activeFileId),e.target.checked?'no':'yes');if(e.target.checked)queueCloud()};
+ $('#cloudAuto').onchange=e=>{
+   const owner=studioSession.user.id,key=autoKey(owner,activeFileId);
+   if(e.target.checked)localStorage.removeItem(key);
+   else{
+     const base=cloudBase(owner,activeFileId);
+     if(base.requested&&!base.snapshot){const row=deviceRecord(activeFileId);saveCloudBase(owner,activeFileId,{...base,snapshot:{revision:row.revision,document:row.document}})}
+     localStorage.setItem(key,'yes');
+   }
+   queueCloud();
+ };
  $('[data-cmd=cloud-save]').onclick=()=>cloudTask(saveCloud);
  $('[data-cmd=sign-out]').onclick=()=>cloudTask(async()=>{try{await api('/auth/v1/logout?scope=local','POST',null,studioSession.access_token)}finally{keepSession(null);filesDialog()}});
  const list=$('#cloudList'), note=$('#cloudNote');
+ if(!navigator.onLine){note.textContent='Offline. You can keep editing on this device or queue a cloud save for when you reconnect.';return}
  (async()=>{
    const s=await session(), rows=[];let batch;
    do {batch=await api(projectsApi+'?owner_id=eq.'+s.user.id+'&select=project_id,title&order=title,project_id&limit=100&offset='+rows.length,'GET',null,s.access_token);rows.push(...batch)} while(batch.length===100);
@@ -59,8 +89,10 @@ function cloudDialog() {
 function accountDialog(){
  modal('Form Studio account','<p>Use your Personal Ledger app login if you already have one, or create an account with your email.</p><form id="cloudLogin">'+field('Email','<input type="email" id="cloudEmail" required autocomplete="username">')+field('Password','<input type="password" id="cloudPass" required autocomplete="current-password">')+'<div class="fileActions"><button class="btn primary" type="submit">Sign in</button><button class="btn" type="button" id="cloudRegister">Create account</button></div></form><p id="cloudNote" role="status"></p>'+btn('files','Back to files'));
  const form=$('#cloudLogin');
+ if(!navigator.onLine)$('#cloudNote').textContent='You can work offline on this device. Connect to the internet to sign in or create an account.';
  function authenticate(register){
    if(!form.reportValidity())return;
+   if(!navigator.onLine){$('#cloudNote').textContent='Connect to the internet to sign in or create an account.';return}
    const email=$('#cloudEmail').value.trim(),password=$('#cloudPass').value;
    cloudTask(async()=>{
      const account=await api(register?'/auth/v1/signup':'/auth/v1/token?grant_type=password','POST',{email,password});
@@ -77,22 +109,75 @@ async function cloudTask(fn){
 }
 async function saveCloud(){
  if(!write())throw Error('Save or download your device changes first.');
+ const id=activeFileId,owner=studioSession?.user.id,row=deviceRecord(id);
+ if(!owner)throw Error('Sign in to Form Studio to save to your cloud.');
  await uploadFinished;
- await uploadProject(deviceRecord(activeFileId),await session());return 'Project saved to your personal cloud';
+ return withUploadLock(owner,id,async()=>{
+   if(studioSession?.user.id!==owner)throw Error('The signed-in account changed. Try again.');
+   const base=cloudBase(owner,id);
+   if(base.deviceRevision===row.revision&&!base.attempt&&!base.conflict){
+     if(base.requested)markCloud(owner,id,base.revision,row.revision);
+     refreshCloudStatus(owner,id);return 'This version is already saved to your personal cloud';
+   }
+   const snapshot=autoEnabled(owner,id)?null:{revision:row.revision,document:row.document};
+   const request={...base,conflict:false,requested:true,manualRevision:snapshot?.revision||null,snapshot};
+   try{saveCloudBase(owner,id,request)}
+   catch(e){
+     if(e.name!=='QuotaExceededError'||!snapshot)throw e;
+     if(!navigator.onLine)throw Error('Your device copy is saved. Browser storage is full. Connect, then use Save current project to cloud, or export a backup from Files.');
+     // A manual save can still be sent immediately if local storage cannot fit a second full copy.
+     saveCloudBase(owner,id,{...request,snapshot:null});
+   }
+   refreshCloudStatus(owner,id);
+   if(!navigator.onLine)return 'Saved on this device. Your cloud save is queued.';
+   try{
+     await transferProject(row,await session());refreshCloudStatus(owner,id);return 'Project saved to your personal cloud';
+   }catch(e){
+     refreshCloudStatus(owner,id);
+     if(e.retryable){queueCloud(2500,id);return 'Saved on this device. Cloud save pending.'}
+     throw e;
+   }
+ });
 }
-async function uploadProject(row,s){
- const owner=s.user.id;
- const base=cloudBase(owner,row.id),revision=crypto.randomUUID();
- if(base.deviceRevision===row.revision)return;
- const body={revision,document:row.document};
- if(base.revision){
-   const filter='?owner_id=eq.'+owner+'&project_id=eq.'+row.id+'&revision=eq.'+base.revision+'&select=revision';
-   const updated=await api(projectsApi+filter,'PATCH',body,s.access_token,'return=representation');
-   if(!updated.length)throw Error('The cloud project changed. Open its latest version below. Your local edits will be kept as a separate project.');
- }else{
-   await api(projectsApi,'POST',{...body,owner_id:owner,project_id:row.id},s.access_token,'return=minimal');
+function withUploadLock(owner,id,fn){
+ if(typeof navigator!=='undefined'&&navigator.locks?.request)
+   return navigator.locks.request('formstudio.upload.'+owner+'.'+id,fn);
+ return fn();
+}
+function uploadProject(row,s){return withUploadLock(s.user.id,row.id,()=>transferProject(row,s))}
+async function transferProject(row,s){
+ const owner=s.user.id,id=row.id;
+ if(studioSession?.user.id!==owner)throw Error('The signed-in account changed. Try again.');
+ let base=cloudBase(owner,id);
+ function conflict(){
+   saveCloudBase(owner,id,{...cloudBase(owner,id),conflict:true});
+   throw Error(conflictMessage);
  }
- markCloud(owner,row.id,revision,row.revision);return 'Project saved to your personal cloud';
+ // An interrupted request can have reached Postgres before the browser received its reply.
+ // The device revision identifies that exact snapshot across retries and browser restarts.
+ if(base.attempt){
+   const found=await api(projectsApi+'?owner_id=eq.'+owner+'&project_id=eq.'+id+'&select=revision','GET',null,s.access_token);
+   const revision=found[0]?.revision||null;
+   if(revision===base.attempt){
+     base={...base,revision,deviceRevision:revision,attempt:null};saveCloudBase(owner,id,base);
+   }else if(revision!==(base.revision||null))conflict();
+ }
+ // An explicit save in manual mode refers to exactly the revision chosen, even if other edits arrive before reconnect.
+ row=base.snapshot||(base.manualRevision===row.revision?row:deviceRecord(id)||row);
+ if(base.manualRevision&&row.revision!==base.manualRevision)throw Error('A newer device edit replaced the queued version. Save current project to cloud to choose the new version.');
+ if(studioSession?.user.id!==owner)throw Error('The signed-in account changed. Try again.');
+ if(base.deviceRevision===row.revision){if(base.requested||base.attempt)markCloud(owner,id,base.revision,row.revision);return}
+ const revision=row.revision,body={revision,document:row.document};
+ saveCloudBase(owner,id,{...base,attempt:revision});
+ if(base.revision){
+   const filter='?owner_id=eq.'+owner+'&project_id=eq.'+id+'&revision=eq.'+base.revision+'&select=revision';
+   const updated=await api(projectsApi+filter,'PATCH',body,s.access_token,'return=representation');
+   if(!updated.length)conflict();
+ }else{
+   try{await api(projectsApi,'POST',{...body,owner_id:owner,project_id:id},s.access_token,'return=minimal')}
+   catch(e){if(e.status===409)conflict();throw e}
+ }
+ markCloud(owner,id,revision,row.revision);return 'Project saved to your personal cloud';
 }
 async function openCloud(id){
  if(!isFileId(id)||!write())return;
@@ -114,34 +199,41 @@ restoreSession();
 let autoSending=false,uploadFinished=Promise.resolve();
 const autoKey=(owner,id)=>'formstudio.cloud.manual.'+owner+'.'+id;
 function autoEnabled(owner,id){return localStorage.getItem(autoKey(owner,id))!=='yes'}
-function queueCloud(delay=1300,id=activeFileId) {
+function queueCloud(delay=1300,id=activeFileId,retries=0) {
   if(!studioSession||!storageOK)return;
   const owner=studioSession.user.id,base=cloudBase(owner,id);
-  if(!base.revision||!autoEnabled(owner,id)||!navigator.onLine)return;
-  const local=deviceRecord(id);if(!local||base.deviceRevision===local.revision)return;
+  refreshCloudStatus(owner,id);
+  if(base.conflict||(!base.requested&&(!base.revision||!autoEnabled(owner,id)))||!navigator.onLine)return;
+  const local=deviceRecord(id);if(!local||(!base.requested&&base.deviceRevision===local.revision))return;
   async function send(){
-    if(!studioSession||studioSession.user.id!==owner||!autoEnabled(owner,id))return;
-    if(!navigator.onLine)return;
-    if(autoSending||cloudBusy){queueCloud(1200,id);return}
+    if(studioSession?.user.id!==owner||!navigator.onLine)return;
+    const current=cloudBase(owner,id);
+    if(current.conflict||!current.requested&&!autoEnabled(owner,id))return;
+    if(autoSending||cloudBusy){queueCloud(1200,id,retries);return}
     autoSending=true;let finishUpload;uploadFinished=new Promise(done=>{finishUpload=done});
     try{
-      const row=deviceRecord(id);if(!row||cloudBase(owner,id).deviceRevision===row.revision)return;
-      await uploadProject(row,await session());
-      if(studioSession?.user.id===owner&&activeFileId===id&&deviceRecord(id)?.revision===row.revision)$('#saveStatus').textContent='Saved on this device and in cloud';
+      const row=deviceRecord(id);if(!row)return;
+      await uploadProject(row,await session());refreshCloudStatus(owner,id);
+      if(studioSession?.user.id===owner&&autoEnabled(owner,id)&&deviceRecord(id)?.revision!==cloudBase(owner,id).deviceRevision)queueCloud(1300,id);
     }catch(e){
-      if(activeFileId===id)$('#saveStatus').textContent='Saved on device · cloud pending';
-      if(navigator.onLine&&activeFileId===id)toast(e.message);
+      if(studioSession?.user.id===owner){
+        refreshCloudStatus(owner,id);
+        if(e.retryable&&navigator.onLine&&retries<5)queueCloud(2500*2**retries,id,retries+1);
+        if(activeFileId===id&&!retries&&navigator.onLine)toast(e.message);
+      }
     }finally{autoSending=false;finishUpload()}
   }
-  // A separate timer per project preserves a pending upload when switching files.
   const k=owner+'.'+id;clearTimeout(pendingCloudTimers.get(k));
   pendingCloudTimers.set(k,setTimeout(()=>{pendingCloudTimers.delete(k);send()},delay));
 }
 const pendingCloudTimers=new Map();
 function resumeCloudSaves(){
- if(!studioSession||!storageOK||!navigator.onLine)return;
+ if(!studioSession||!storageOK)return;
+ refreshCloudStatus(studioSession.user.id,activeFileId);
+ if(!navigator.onLine)return;
  const prefix='formstudio.cloud.base.'+studioSession.user.id+'.';
  const ids=new Set([activeFileId,...Object.keys(localStorage).filter(k=>k.startsWith(prefix)).map(k=>k.slice(prefix.length))]);
  for(const id of ids)if(isFileId(id))queueCloud(1300,id);
 }
 window.addEventListener('online',resumeCloudSaves);
+window.addEventListener('offline',()=>{if(studioSession)refreshCloudStatus(studioSession.user.id,activeFileId)});

@@ -22,7 +22,13 @@ Open **Layers → Select multiple** and select each layer, including layers hidd
 
 ## Projects and personal storage
 
-Open **Files → New project** to create a separate design. Each project autosaves in the current browser. Use **Sign in / Create account** with your personal app email to save a project to your cloud and open it on another device. After the first cloud save, further edits upload automatically unless you turn off that project’s automatic saves. Cloud projects live in the personal Supabase project under owner-only access. Clearing browser site data removes device copies. Download an editable JSON backup from Files. Existing single-workspace saves are preserved. Importing JSON opens it as a new project.
+Open Form Studio online once in each browser and wait for **Ready offline** in the footer. You can then close the tab, disconnect, and reopen the same Form Studio address. The editor, its templates, previews, color sampler, and exports use files stored by that browser.
+
+Open **Files → New project** for a separate design. Applied edits autosave in the current browser, including while offline. Look for **Saved on this device**. Clearing site data can remove both the offline editor and the device copies of your projects. **Files → Download project JSON** gives you an editable backup.
+
+Unapplied Code drafts also save in this browser. To recover one, return to the same project, screen, layout, and selection and open **Code**. Choose **Apply code** to include that change in the design, cloud copy, and export.
+
+For a second copy, open **Files → Sign in / Create account**, then **Save current project to cloud** for each project you want in your personal Supabase. Linked projects upload subsequent edits when the editor is open, online, and signed in with automatic saves enabled. Turn off automatic saves to upload only the versions you choose. An offline or interrupted upload stays pending. If your sign-in has expired or you closed the tab, sign in again to resume your pending saves. **Saved on this device and in cloud** confirms that the current local revision has reached the cloud. On another device, sign in and select the project under **My cloud projects**.
 
 ## Preview a data-entry flow
 
@@ -41,3 +47,5 @@ Choose a component or group and use **Inspector → Place linked copy** to share
 **Files → Project code** shows each screen or window, its groups and components, and shared project files. Use **Add code block** for an embedded component such as a sidebar. Editing a layer in the inspector updates its source. In the multi-file export, screen files assemble the component files, shared runtime code follows trigger connections, and navigation is generated for every screen. Choose **Export → Project source · ZIP**, extract the whole ZIP into one folder, then double-click `index.html`. Keep its accompanying files in that folder. Resize the browser window to preview the laptop, tablet, and phone layouts. **Export → Working website · HTML** gives you a single file that opens offline. To continue visually editing, open the ZIP’s `design.studio.json` with **Files → Import JSON**.
 
 GitHub Pages serves the editor from the repository root. The personal database setup is in `supabase/form-studio.sql` and `supabase/form-studio-projects.sql`, in that order.
+
+When publishing changes to the offline editor files, give `SHELL_VERSION` in `sw.js` a new value in the same release. Existing tabs finish using their cached version. A new version takes over after its files have downloaded and the previous editor tabs close.

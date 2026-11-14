@@ -30,4 +30,9 @@
 .codePart [data-cmd=expand-code]{margin-top:8px}
 .inspector.wideCode{position:fixed;top:115px;right:0;bottom:0;width:min(660px,65vw);z-index:8;box-shadow:-6px 3px 24px #25133526}
 .inspector.wideCode .codeArea{height:clamp(250px,48dvh,640px)}
+.foot{column-gap:8px;row-gap:3px}
+.foot .offlineBox:has(#offlineStatus:empty){display:none}
+.foot button[data-offline-retry]{color:#6540a2;text-decoration:underline;padding:1px 3px}
+.foot button[hidden]{display:none}
+@media(max-width:680px){.foot{height:auto;min-height:32px;flex-wrap:wrap;padding:3px 9px}.foot .offlineBox{margin-right:auto}}
 @media(max-width:850px){.inspector.wideCode.shown{width:calc(100vw - 16px);right:8px;bottom:74px}}

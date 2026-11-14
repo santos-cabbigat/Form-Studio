@@ -18,7 +18,7 @@ function tableMarkup(n,rows) {
 function seedRows(n){return n.initialState==='empty'?[]:tableLines(n).slice(1)}
 function dataInspector(n) {
   if(n.type==='Input')return field('Required','<select data-prop="requirement">'+options([['optional','Optional'],['required','Required']],n.requirement||'optional')+'</select>')+
-    (n.inputType==='select'?field('Dropdown choices · label | value','<textarea data-prop="choices">'+esc(n.choices||'')+'</textarea>'):'');
+    (['select','account','dropdown'].includes(n.inputType)?pickerOptionsEditor(n):'')+(pickerKind(n)?pickerInspector(n):'');
   if(n.type!=='Table')return '';
   return field('Columns on first line · sample rows below','<textarea rows="5" data-prop="rows">'+esc(n.rows)+'</textarea>')+
     field('Start preview with','<select data-prop="initialState">'+options([['sample','Sample rows'],['empty','Empty table']],n.initialState||'sample')+'</select>')+
@@ -45,17 +45,18 @@ function tablesInProject() {
 }
 function saveRowSettings(action={}) {
   const id=$('#target')?.value,entry=tablesInProject().find(t=>t.n.id===id),area=$('#saveFields');
-  if(!area||!entry)return;
+  if(!area)return;area.replaceChildren();if(!entry)return;
+  const saved=action.target===id&&action.fields?mappedFields(action,entry.n):null;
   const inputs=page().nodes.filter(n=>n.type==='Input'&&n.inputType!=='password');
   const normalized=v=>String(v||'').trim().toLowerCase();
   area.innerHTML=(tableLines(entry.n)[0]||['Column 1']).map((col,i)=>{
     const match=inputs.find(n=>normalized(n.name)===normalized(col)) || inputs[i];
-    const selected=action.target===id&&action.fields?action.fields[i]:match?.id;
+    const selected=saved?saved[i]:action.target===id&&action.fields?'':match?.id;
     return field('Column · '+col,'<select data-bind-col>'+options([['','Leave blank'],...inputs.map(n=>[n.id,n.name])],selected||'')+'</select>');
   }).join('')+field('Notification after save','<input id="saveMessage" value="'+esc(action.message??'Entry saved.')+'">')+'<p class="hint">Mapped required fields must be filled before a row is added. Preview rows reset when you reopen Preview.</p>';
 }
 function readSaveRow(a) {
   const fields=$$('[data-bind-col]').map(el=>el.value);
   if(!fields.some(Boolean))throw Error('Connect at least one input to a table column.');
-  return {...a,fields,message:$('#saveMessage').value.trim()};
+  return {...a,fields,columns:columnKeys(tablesInProject().find(t=>t.n.id===a.target).n),message:$('#saveMessage').value.trim()};
 }

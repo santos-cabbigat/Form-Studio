@@ -14,7 +14,15 @@ Open **Files → New project** to create a separate design. Each project autosav
 
 ## Preview a data-entry flow
 
-**Insert → Sample entry form** adds an editable example with an account dropdown, amount, Save button, and table. In **Preview**, try an empty table, sample rows, required-field validation, and a successful save. You can design a custom flow by adding inputs and a table, then choosing **Triggers → Add trigger → Save row to table**. Choose the destination by screen and table name, match input fields to columns, and enter your success message. Input choices can have separate labels and stored values. Designed sample rows belong to the project. Rows entered while running the preview or exported prototype last for that run.
+**Insert → Sample entry form** adds an editable example with an account dropdown, amount, Save button, and table. In **Preview**, try an empty table, sample rows, required-field validation, and a successful save. You can design a custom flow by adding inputs and a table, then choosing **Triggers → Add trigger → Save… → A sample table**. Choose the destination by screen and table name, match input fields to columns, and enter your success message. Input choices can have separate labels and stored values. Designed sample rows belong to the project. Rows entered while running the preview or exported prototype last for that run.
+
+## Pickers and action destinations
+
+Choose **Insert → Picker** for a date, month, year, dropdown, or searchable account picker. In Inspector, set the date display format, popup colors, width and text size. Account and dropdown choices have separate display labels and stored values. Use **Extra button inside popup** to reuse an existing button, or place a button beside the field and select **Triggers → Control a picker**. The **Picker with buttons** template has a working example.
+
+Configure each button by selecting an event, an action and the fields it affects. **Save…** offers a sample table, a named value for this run, another field, or a simulated password change. **Clear…** affects the fields you select. **Value changed** also lets a picker run a trigger when a visitor makes a selection. Preview can simulate saving, failure and offline feedback. Password simulations accept dummy input and discard it. A production integration requires a separate backend.
+
+Choose a component or group and use **Inspector → Place linked copy** to share its content and appearance across screens. Each copy has its own position and triggers. **Detach this copy** makes it independent again.
 
 ## Screen and component source
 

@@ -5,6 +5,7 @@ function cssProps(n,b){let s=n.style;return {left:b[0]+'px',top:b[1]+'px',width:
 function markup(n,source=false){
  const type=n.type,label=esc(n.text);
  if(type==='Button')return '<button type="button">'+label+'</button>';
+ if(pickerKind(n))return pickerMarkup(n);
  if(type==='Input'){
    const attrs=' aria-label="'+esc(n.name)+'"'+(n.requirement==='required'?' required':'');
    if(n.inputType==='select')return '<select'+attrs+'><option value="">'+label+'</option>'+dropdownChoices(n).map(o=>'<option value="'+esc(o.value)+'">'+esc(o.label)+'</option>').join('')+'</select>';
@@ -27,7 +28,7 @@ function makeEl(n,b,edit=false){
  if(edit){el.tabIndex=-1;if(el.tagName==='INPUT')el.readOnly=true}
  return el
 }
-function runtime(p,mode,start,forcedDevice){
+function runtime(p,mode,start,forcedDevice,response='success'){
  const root=document.getElementById('app'),surface=document.createElement('main'),modal=document.createElement('dialog');
  const close=document.createElement('button'); close.textContent='×';close.className='exit';close.setAttribute('aria-label','Close window');
  const inner=document.createElement('div');modal.append(close,inner);root.append(surface,modal);close.onclick=()=>modal.close();
@@ -44,20 +45,78 @@ function runtime(p,mode,start,forcedDevice){
    b.onclick=()=>{if(modal.open)modal.close();current=pg;draw()};nav.append(b);
  }}
  const notice=document.createElement('div');notice.className='entryNotice';notice.setAttribute('role','status');root.append(notice);let timer;
- function notify(message){clearTimeout(timer);const parent=modal.open?modal:root;if(notice.parentNode!==parent)parent.append(notice);notice.textContent=message;timer=setTimeout(()=>notice.textContent='',4500)}
+ function notify(message,hold=false){clearTimeout(timer);const parent=modal.open?modal:root;if(notice.parentNode!==parent)parent.append(notice);notice.textContent=message;if(!hold)timer=setTimeout(()=>notice.textContent='',4500)}
+ const previewValues=new Map(), lastSubmit=new WeakMap();
+ const nodes=new Map(p.pages.flatMap(pg=>pg.nodes.map(n=>[n.id,n])));
+ const element=(id,container=root)=>container.querySelector('[data-id="'+CSS.escape(id)+'"]');
+ const valueOf=(n,el)=>pickerKind(n)?(values.get(n.id)||''):(el?.value??values.get(n.id)??'');
+ function put(n,el,value){
+   if(!n)return;
+   if(n.inputType!=='password')values.set(n.id,value);
+   if(!el)return;
+   if(pickerKind(n)){el.firstElementChild.textContent=pickerLabel(n,value);el.setAttribute('aria-label',n.name+(value?' · '+pickerLabel(n,value):''))}
+   else el.value=value;
+ }
+ function readField(id,board,password=false){
+   const n=nodes.get(id),el=element(id,board);
+   if(!n||n.type!=='Input'||!el||(!password&&n.inputType==='password')){notify('A linked field is unavailable. Edit this trigger to reconnect it.');return null}
+   const value=valueOf(n,el);
+   if((el.checkValidity&&!el.checkValidity())||((n.requirement==='required'||password)&&!value.trim())){el.reportValidity?.();el.focus();notify('Check '+n.name+'.');return null}
+   return {n,el,value};
+ }
+ const pickers=pickerController(valueOf,(n,el,value,userChoice)=>{
+   const old=valueOf(n,el);put(n,el,value);
+   if(userChoice&&old!==value)act(n,'change',el.closest('.board'));
+ },p.theme.accent,(n,anchor)=>{
+   const id=n.picker?.footerButton,board=anchor.closest('.board'),button=nodes.get(id);
+   if(!button||button.type!=='Button'||!element(id,board))return null;
+   return {label:button.text||button.name,run:()=>act(button,'click',board)};
+ });
  function saveRow(a,board){
-   const table=tables.get(a.target);if(!table||!Array.isArray(a.fields)){notify('Choose a destination table in the trigger.');return false}
+   const table=tables.get(a.target);
+   if(!table){notify('Choose a destination table in the trigger.');return false}
+   const fields=mappedFields(a,table);
+   if(!fields){notify('A linked table column changed. Reconnect the Save trigger.');return false}
    const cells=[];
-   for(const id of a.fields){
+   for(const id of fields){
      if(!id){cells.push('');continue}
-     const field=board.querySelector('[data-id="'+CSS.escape(id)+'"]');
-     if(!field||!['INPUT','SELECT'].includes(field.tagName)||field.type==='password'){notify('A linked field is unavailable. Check the Save trigger.');return false}
-     if(!field.checkValidity()||(field.required&&!field.value.trim())){field.reportValidity();field.focus();notify('Check '+field.getAttribute('aria-label')+'.');return false}
-     cells.push(field.value);
+     const field=readField(id,board);if(!field)return false;cells.push(field.value);
    }
-   records.get(a.target).push(cells);
+   const time=Date.now(),signature=JSON.stringify(cells),previous=lastSubmit.get(a);
+   if(previous&&previous.signature===signature&&time-previous.time<650)return false;
+   lastSubmit.set(a,{signature,time});records.get(a.target).push(cells);
    for(const el of root.querySelectorAll('[data-type="Table"]'))if(el.dataset.id===a.target)el.innerHTML=tableMarkup(table,records.get(a.target));
    if(a.message)notify(a.message);return true;
+ }
+ function applyDataAction(a,board){
+   const n=nodes.get(a.target);
+   if(a.action==='saveRow')return saveRow(a,board);
+   if(a.action==='message'||a.action==='customDemo'){notify(a.message);return true}
+   if(a.action==='clearFields'){
+     const targets=a.fields.map(id=>[nodes.get(id),element(id,board)]);
+     if(targets.some(([n,el])=>n?.type!=='Input'||!el)){notify('Reconnect the missing field before clearing.');return false}
+     for(const [n,el] of targets)put(n,el,'');return true;
+   }
+   if(a.action==='pickerAction'){
+     const el=element(a.target,board);if(!n||!pickerKind(n)||!el){notify('Choose a picker on this screen.');return false}
+     pickers.run(n,el,a.operation);return true;
+   }
+   if(a.action==='loadValue'||a.action==='copyValue'){
+     if(n?.type!=='Input'||n.inputType==='password'){notify('Choose a destination field.');return false}
+     let value;
+     if(a.action==='loadValue'){
+       if(!previewValues.has(a.key)){notify('No preview value named “'+a.key+'” has been saved yet.');return false}
+       value=previewValues.get(a.key);
+     }else{const src=readField(a.source,board);if(!src)return false;value=src.value}
+     if(!acceptsPickerValue(n,value)){notify('This value does not match '+n.name+'.');return false}
+     put(n,element(a.target),value);return true;
+   }
+   if(a.action==='saveValue'||a.action==='passwordDemo'){
+     const password=a.action==='passwordDemo',field=readField(a.target,board,password);if(!field)return false;
+     if(password){if(field.n.inputType!=='password'){notify('Choose a sample password field.');return false}put(field.n,field.el,'');notify(a.message||'Password update simulated.')}
+     else previewValues.set(a.key,field.value);
+   }
+   return true;
  }
  function device(){return forcedDevice||(window.innerWidth<600?'phone':window.innerWidth<1040?'tablet':'laptop')}
  function paint(page,target,available){
@@ -67,7 +126,13 @@ function runtime(p,mode,start,forcedDevice){
  page.nodes.filter(n=>!n.hide?.[d]).forEach(n=>{
  let el=makeEl(n,boxFor(n,d,p,page));board.append(el);
  if(n.type==='Table')el.innerHTML=tableMarkup(n,records.get(n.id));
- if(n.type==='Input'){if(values.has(n.id))el.value=values.get(n.id);el.addEventListener('input',()=>values.set(n.id,el.value));el.addEventListener('change',()=>values.set(n.id,el.value))}
+ if(pickerKind(n)){
+   put(n,el,values.get(n.id)||'');
+   el.addEventListener('click',()=>pickers.open(n,el));
+ }else if(n.type==='Input'){
+   if(n.inputType!=='password'){if(values.has(n.id))el.value=values.get(n.id);el.addEventListener('input',()=>values.set(n.id,el.value))}
+   el.addEventListener('change',()=>{if(n.inputType!=='password')values.set(n.id,el.value);act(n,'change',board)});
+ }
  if(n.type==='Custom'&&n.actions?.length){const b=boxFor(n,d,p,page),hit=document.createElement('button');hit.className='hit';hit.setAttribute('aria-label',n.name);Object.assign(hit.style,{left:b[0]+'px',top:b[1]+'px',width:b[2]+'px',height:b[3]+'px'});board.append(hit);el=hit}
  if(n.actions?.length){if(el.tabIndex<0)el.tabIndex=0;
  el.addEventListener('click',()=>act(n,'click',board));el.addEventListener('keydown',e=>{if(e.key==='Enter'&&n.actions.some(a=>a.event==='enter')){e.preventDefault();act(n,'enter',board)}})}
@@ -75,7 +140,11 @@ function runtime(p,mode,start,forcedDevice){
  }
  function act(n,event,board){
  for(const a of n.actions.filter(a=>a.event===event)){
- if(a.action==='saveRow'&&!saveRow(a,board))return;
+ if(['saveRow','saveValue','copyValue','passwordDemo'].includes(a.action)&&response!=='success'){
+   const feedback={saving:'Saving…',failed:'Save failed. Try again.',offline:'Offline. Your entry is still here.'};
+   notify(a.feedback?.[response]||feedback[response],response==='saving');return;
+ }
+ if(!applyDataAction(a,board))return;
  const page=p.pages.find(q=>q.id===a.target);
  if(a.action==='open'&&page?.kind==='window'){shown=page;show()}
  if(a.action==='close'&&modal.open)modal.close();
@@ -84,18 +153,18 @@ function runtime(p,mode,start,forcedDevice){
  }
  }
  function show(){if(!shown)return;paint(shown,inner,Math.max(100,innerWidth-46));if(!modal.open)modal.showModal()}
- function draw(){for(const b of nav.children)b.setAttribute('aria-current',b.dataset.page===current.id?'page':'false');root.style.setProperty('--accent',p.theme.accent);root.style.fontFamily=p.theme.font;paint(current,surface,document.documentElement.clientWidth);if(shown)show()}
+ function draw(){pickers.close();for(const b of nav.children)b.setAttribute('aria-current',b.dataset.page===current.id?'page':'false');root.style.setProperty('--accent',p.theme.accent);root.style.fontFamily=p.theme.font;paint(current,surface,document.documentElement.clientWidth);if(shown)show()}
  modal.addEventListener('close',()=>shown=null);window.addEventListener('resize',()=>{clearTimeout(resize);resize=setTimeout(draw,90)});draw()
 }
 function runtimeCode(){
- const funcs=[esc,cap,boxFor,bounds,cssProps,tableLines,dropdownChoices,tableMarkup,seedRows,markup,customDoc,makeEl,runtime];
+ const funcs=[esc,cap,boxFor,bounds,cssProps,tableLines,dropdownChoices,tableMarkup,seedRows,columnKeys,mappedFields,pickerKind,pickerFormatOptions,pickerLabel,pickerMarkup,acceptsPickerValue,pickerController,markup,customDoc,makeEl,runtime];
  return 'const devices='+JSON.stringify(devices)+';\n'+funcs.map(f=>'const '+f.name+' = '+f.toString()+';').join('\n');
 }
 function runtimeHead(p){
- return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(p.name)+'</title><style>'+nativeCSS+'body{margin:0;background:#f5f4f8}main{min-height:100vh;display:grid;justify-content:center;align-content:start}.sized{position:relative}.board{position:absolute;transform-origin:top left;overflow:hidden}.exit{position:absolute;right:4px;top:4px;z-index:2;border:0;border-radius:50%;background:#f2eff6;color:#332c42;width:28px;height:28px;font-size:20px;cursor:pointer}dialog{padding:0;border:0;border-radius:13px;box-shadow:0 18px 72px #1f123655;max-width:98vw;max-height:95vh}dialog::backdrop{background:#21183366}.hit{position:absolute;background:transparent;border:0;cursor:pointer}.screenTabs{display:flex;gap:5px;padding:8px;overflow:auto;background:white;border-bottom:1px solid #ddd}.screenTabs button{white-space:nowrap;font:inherit;padding:6px 12px;border:0;background:transparent;border-radius:5px}.screenTabs [aria-current=page]{color:var(--accent);background:#f1edf8}.entryNotice:not(:empty){position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#252132;color:white;border-radius:7px;padding:10px 16px;z-index:20}.object[data-type=Table]{overflow:auto}.object tr[data-empty] td{color:#716b78;text-align:center;padding:16px 5px}</style></head><body><div id="app"></div>';
+ return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(p.name)+'</title><style>'+nativeCSS+pickerCSS+'body{margin:0;background:#f5f4f8}main{min-height:100vh;display:grid;justify-content:center;align-content:start}.sized{position:relative}.board{position:absolute;transform-origin:top left;overflow:hidden}.exit{position:absolute;right:4px;top:4px;z-index:2;border:0;border-radius:50%;background:#f2eff6;color:#332c42;width:28px;height:28px;font-size:20px;cursor:pointer}dialog{padding:0;border:0;border-radius:13px;box-shadow:0 18px 72px #1f123655;max-width:98vw;max-height:95vh}dialog::backdrop{background:#21183366}.hit{position:absolute;background:transparent;border:0;cursor:pointer}.screenTabs{display:flex;gap:5px;padding:8px;overflow:auto;background:white;border-bottom:1px solid #ddd}.screenTabs button{white-space:nowrap;font:inherit;padding:6px 12px;border:0;background:transparent;border-radius:5px}.screenTabs [aria-current=page]{color:var(--accent);background:#f1edf8}.entryNotice:not(:empty){position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#252132;color:white;border-radius:7px;padding:10px 16px;z-index:20}.object[data-type=Table]{overflow:auto}.object tr[data-empty] td{color:#716b78;text-align:center;padding:16px 5px}</style></head><body><div id="app"></div>';
 }
-function buildHTML(p,start,device,dataState){
+function buildHTML(p,start,device,dataState,response){
  const safe=o=>JSON.stringify(o).replace(/</g,'\\u003c');
  const liveProject={...p,templates:[]};
- return runtimeHead(p)+'<script>'+runtimeCode()+'\nruntime('+safe(liveProject)+','+safe(dataState||'design')+','+safe(start||p.pages[0].id)+','+safe(device||null)+');<\/script></body></html>';
+ return runtimeHead(p)+'<script>'+runtimeCode()+'\nruntime('+safe(liveProject)+','+safe(dataState||'design')+','+safe(start||p.pages[0].id)+','+safe(device||null)+','+safe(response||'success')+');<\/script></body></html>';
 }

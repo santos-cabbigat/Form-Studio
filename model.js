@@ -1,14 +1,14 @@
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clone=o=>JSON.parse(JSON.stringify(o));
 const uid=()=> 'n'+Math.random().toString(36).slice(2,11);
-const types=['Button','Text','Input','Image','Module','Window','Table','Shape'];
+const types=['Button','Text','Input','Picker','Image','Module','Window','Table','Shape'];
 const devices={laptop:[960,600],tablet:[768,760],phone:[390,760]};
 const sizes={laptop:[960,1280,1440],tablet:[768,820,1024],phone:[360,390,430]};
 const cap=x=>x[0].toUpperCase()+x.slice(1);
 const categoryIcon=t=>({Heading:'text',Custom:'code'}[t]||t.toLowerCase());
 const families=['Arial, sans-serif','Georgia, serif','Verdana, sans-serif','monospace'];
 const defaultColors=['#7545D6','#442881','#EAE1FF','#22202A','#FFFFFF'];
-const variants={Button:['Solid','Outline','Pill'],Text:['Heading','Paragraph','Caption'],Input:['Text','Dropdown','Number','Email','Password'],Image:['Artwork','Upload image'],Module:['Card','Panel','Outline'],Window:['Dialog','Wide dialog','Blank window'],Table:['Ledger','Simple'],Shape:['Rectangle','Circle','Oval']};
+const variants={Picker:['Date','Month','Year','Dropdown','Account'],Button:['Solid','Outline','Pill'],Text:['Heading','Paragraph','Caption'],Input:['Text','Dropdown','Number','Email','Password'],Image:['Artwork','Upload image'],Module:['Card','Panel','Outline'],Window:['Dialog','Wide dialog','Blank window'],Table:['Ledger','Simple'],Shape:['Rectangle','Circle','Oval']};
 function makePage(name,kind='screen',width=460){return {id:uid(),name,kind,width,height:kind==='window'?310:null,nodes:[]}}
 function node(type,text,box,props={}) {
  const small={Button:[170,44],Text:[200,34],Input:[230,48],Image:[180,150],Module:[220,145],Table:[280,145],Shape:[110,90],Custom:[200,80]};

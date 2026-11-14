@@ -1,7 +1,7 @@
 'use strict';
 
 // Bump with each editor shell release. Old tabs finish using their original bundle.
-const SHELL_VERSION = 'website4';
+const SHELL_VERSION = 'authsplit1';
 const scope = new URL(self.registration.scope);
 const indexURL = new URL('index.html', scope).href;
 const cachePrefix = 'form-studio-shell:' + scope.href + ':';
@@ -17,7 +17,7 @@ function editorAsset(url) {
 function shellAssets(html) {
   // The published index is static. Preserve query strings so scripts and styles use
   // the same release as the document. The color sampler is the only lazy dependency.
-  const urls = new Set([lazyAsset,new URL('settings.html',scope).href,new URL('website-settings.js?v=website4',scope).href]);
+  const urls = new Set([lazyAsset,new URL('settings.html',scope).href,new URL('website-settings.js?v=authsplit1',scope).href]);
   for (const [tag] of html.matchAll(/<(?:script|link)\b[^>]*>/gi)) {
     const script = /^<script\b/i.test(tag);
     if (!script && !/\brel\s*=\s*["']stylesheet["']/i.test(tag)) continue;

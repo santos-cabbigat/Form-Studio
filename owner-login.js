@@ -2,7 +2,7 @@
 (async function ownerEntrance(){
  const owner='cabbigatsantos07@gmail.com';
  const screen=document.getElementById('ownerEntrance'), form=screen.querySelector('form'),message=screen.querySelector('[role=status]');
- const submit=form.querySelector('[type=submit]'),create=form.querySelector('[data-create]');
+ const submit=form.querySelector('[type=submit]');
  const verifierKey='formstudio.owner.offline.v1';
  if(localStorage.getItem('formstudio.rememberEmail')==='yes')form.elements.email.value=owner;
  async function proof(password,salt){
@@ -26,26 +26,19 @@
    }
    document.body.classList.remove('locked');screen.remove();
  }
- function busy(on){submit.disabled=create.disabled=on}
- async function login(register){
-   if(register && !form.elements.password.value){
-     const bytes=crypto.getRandomValues(new Uint8Array(24));
-     form.elements.password.value=Array.from(bytes,b=>'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'[b%57]).join('');
-     form.elements.password.type='text';
-     message.textContent='Save this generated password privately. Press Set up first password again to register it. Existing accounts keep their current password.';
-     return;
-   }
+ function busy(on){submit.disabled=on}
+ async function login(){
    if(!form.reportValidity())return;
    const email=form.elements.email.value.trim().toLowerCase(),password=form.elements.password.value;
    if(email!==owner){message.textContent='Use the owner email address.';return}
    busy(true);
    try{
-    if(!register&&!navigator.onLine){await enter(password);return}
-    const s=await api(register?'/auth/v1/signup':'/auth/v1/token?grant_type=password','POST',{email,password});form.elements.password.value='';
-    if(!s.access_token){message.textContent='Check your email for confirmation, then return and sign in. If you already have an account, use its existing password.';return}
+    if(!navigator.onLine){await enter(password);return}
+    const s=await api('/auth/v1/token?grant_type=password','POST',{email,password});form.elements.password.value='';
+    if(!s.access_token){message.textContent='Sign-in did not return a session.';return}
     keepSession(s);await enter(password);
    }catch(e){message.textContent=e.message}finally{busy(false)}
  }
- form.onsubmit=e=>{e.preventDefault();return login(false)};create.onclick=()=>login(true);
+ form.onsubmit=e=>{e.preventDefault();return login()};
  if(studioSession){busy(true);try{await enter()}catch(e){message.textContent=e.message}finally{busy(false)}}
 })();

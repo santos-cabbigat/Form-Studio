@@ -87,20 +87,7 @@ function cloudDialog() {
  })().catch(e=>{note.textContent=e.message});
 }
 function accountDialog(){
- modal('Form Studio account','<p>Use your Personal Ledger app login if you already have one, or create an account with your email.</p><form id="cloudLogin">'+field('Email','<input type="email" id="cloudEmail" required autocomplete="username">')+field('Password','<input type="password" id="cloudPass" required autocomplete="current-password">')+'<div class="fileActions"><button class="btn primary" type="submit">Sign in</button><button class="btn" type="button" id="cloudRegister">Create account</button></div></form><p id="cloudNote" role="status"></p>'+btn('files','Back to files'));
- const form=$('#cloudLogin');
- if(!navigator.onLine)$('#cloudNote').textContent='You can work offline on this device. Connect to the internet to sign in or create an account.';
- function authenticate(register){
-   if(!form.reportValidity())return;
-   if(!navigator.onLine){$('#cloudNote').textContent='Connect to the internet to sign in or create an account.';return}
-   const email=$('#cloudEmail').value.trim(),password=$('#cloudPass').value;
-   cloudTask(async()=>{
-     const account=await api(register?'/auth/v1/signup':'/auth/v1/token?grant_type=password','POST',{email,password});
-     if(!account.access_token){const message='Check your email for confirmation, then return here and sign in.';if(form.isConnected)$('#cloudNote').textContent=message;else toast(message);return}
-     keepSession(account);return 'Signed in';
-   });
- }
- form.onsubmit=e=>{e.preventDefault();authenticate(false)};$('#cloudRegister').onclick=()=>authenticate(true);
+ modal('Cloud sign-in','<p>Sign in online from the Form Studio entrance to access cloud projects.</p><a href="./">Form Studio sign-in</a>');
 }
 async function cloudTask(fn){
  if(cloudBusy)return;cloudBusy=true;

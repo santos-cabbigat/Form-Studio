@@ -10,6 +10,6 @@ Open **Layers → Select multiple** and select each layer, including layers hidd
 
 ## Personal workspace
 
-The editor saves changes locally. **Cloud workspace** uses the existing Personal Ledger app login in the personal Supabase project. Choose **Save to cloud** on one device and **Load cloud copy** on another. Conflicting saves require loading the latest cloud version. Project exports also include the template library. To move a design from the original ChatGPT-hosted editor, export editable JSON there, then use **Export → Import project file** here.
+The editor saves changes locally. **Cloud workspace** uses your Personal Ledger app login (or **Set up login** for first use) in the personal Supabase project. Choose **Save to cloud** on one device and **Load cloud copy** on another. Conflicting saves require loading the latest cloud version. Project exports also include the template library. To move a design from the original ChatGPT-hosted editor, export editable JSON there, then use **Export → Import project file** here.
 
 GitHub Pages serves the static files from the repository root. Only the publishable Supabase key belongs in the client. The table definition and row-level access policy are in `supabase/form-studio.sql`.

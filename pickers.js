@@ -112,7 +112,7 @@ function pickerController(getValue,setValue,accent,extraButton) {
     else{const day=d.getDate();d.setDate(1);d.setMonth(d.getMonth()+delta);d.setDate(Math.min(day,new Date(d.getFullYear(),d.getMonth()+1,0).getDate()))}
     setValue(n,el,iso(d,kind));
   }
-  return {open,close,run};
+  return {open,close,run,position};
 }
 function editPickerChoice(index,what,value=''){
   const n=sel(),choices=dropdownChoices(n);

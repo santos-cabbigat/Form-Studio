@@ -4,7 +4,14 @@ function codeSlug(name) {
   return String(name).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,48)||'item';
 }
 // A page controls its layer order. Groups and individual components can live in their own files.
-function projectSources(p) {
+function sourcePath(dir,n){
+  const title=n.group?(n.groupName||'Group'):n.name;
+  return dir+'/components/'+codeSlug(title)+'-'+(n.group||n.id)+'.js';
+}
+function exportScreen(p,start){
+  return p.pages.find(pg=>pg.id===start&&pg.kind==='screen')||p.pages.find(pg=>pg.kind==='screen');
+}
+function projectSources(p,start) {
   const encode=value=>JSON.stringify(value,null,2);
   const files=new Map(), tags=[];
   function script(path,body){files.set(path,body+'\n');tags.push('<script src="./'+path+'"></script>')}
@@ -15,15 +22,14 @@ function projectSources(p) {
     const dir='screens/'+codeSlug(pg.name)+'-'+pg.id;
     const bundles=new Map();
     for(const n of pg.nodes){const id=n.group||n.id;if(!bundles.has(id))bundles.set(id,[]);bundles.get(id).push(n)}
-    for(const [id,nodes] of bundles){
-      const title=nodes[0].group?(nodes[0].groupName||'Group'):nodes[0].name;
-      const path=dir+'/components/'+codeSlug(title)+'-'+codeSlug(id)+'.js';
+    for(const nodes of bundles.values()){
+      const path=sourcePath(dir,nodes[0]);
       script(path,'for (const layer of '+encode(nodes)+') studioLayers.set(layer.id, layer);');
     }
     const {nodes,...props}=pg;
     script(dir+'/screen.js','studioProject.pages.push({\n  ...'+encode(props)+',\n  nodes: '+encode(nodes.map(n=>n.id))+'.map(id => studioLayers.get(id))\n});');
   }
-  script('start.js','runtime(studioProject, "design", '+encode(pages.find(pg=>pg.kind==='screen').id)+', null);');
+  script('start.js','runtime(studioProject, "design", '+encode(exportScreen(p,start).id)+', null);');
   files.set('index.html',runtimeHead(p)+tags.join('\n')+'\n</body></html>');
   return files;
 }
@@ -43,18 +49,18 @@ function sourceZip(files) {
   return new Blob([...chunks,...directory,end.data],{type:'application/zip'});
 }
 function downloadSources(){
-  const zip=sourceZip(projectSources(project));download(zip,codeSlug(project.name)+'-source.zip','application/zip');toast('Project source downloaded');
+  const zip=sourceZip(projectSources(project,pageId));download(zip,codeSlug(project.name)+'-source.zip','application/zip');toast('Project source downloaded');
 }
 function codeBrowser(initial=pageId){
   const pg=project.pages.find(q=>q.id===initial)||page();
-  const files=projectSources(project),prefix='screens/'+codeSlug(pg.name)+'-'+pg.id+'/';
+  const files=projectSources(project,pageId),prefix='screens/'+codeSlug(pg.name)+'-'+pg.id+'/';
   const fileList=[prefix+'screen.js',...[...files.keys()].filter(path=>path.startsWith(prefix+'components/')),'project.js','shared/runtime.js','start.js','index.html'];
   modal('Project code',field('Screen or window','<select id="codePage">'+options(project.pages.map(q=>[q.id,q.name]),pg.id)+'</select>')+field('Code file','<select id="codePath">'+options(fileList.map(path=>[path,path===prefix+'screen.js'?'Screen code':path.replace(prefix,'')]),fileList[0])+'</select>')+field('Selected file','<textarea readonly id="projectSource" rows="9" spellcheck="false"></textarea>')+'<p>Screen and component files connect automatically through the project. Select a layer in the editor to change its code.</p><div class="fileActions">'+btn('open-code-layer','Edit selected code')+btn('add-code-block','Add code block')+btn('source-zip','Download source ZIP','export','btn primary')+'</div>',true);
   const area=$('#projectSource'),file=$('#codePath'),edit=$('[data-cmd=open-code-layer]');
   function display(){area.value=files.get(file.value);area.select();area.scrollTop=0;edit.disabled=!file.value.startsWith(prefix);}
   file.onchange=display;$('#codePage').onchange=e=>codeBrowser(e.target.value);
   edit.onclick=()=>{
-    const path=file.value;choosePage(pg.id);const nodes=pg.nodes.filter(n=>path.endsWith('-'+codeSlug(n.group||n.id)+'.js'));selectIds(nodes.map(n=>n.id));mode='code';drawProps();if(innerWidth<=850)$('#inspector').classList.add('shown');selectCode();
+    const path=file.value;choosePage(pg.id);const nodes=pg.nodes.filter(n=>sourcePath(prefix.slice(0,-1),n)===path);selectIds(nodes.map(n=>n.id));mode='code';drawProps();if(innerWidth<=850)$('#inspector').classList.add('shown');selectCode();
   };
   $('[data-cmd=add-code-block]').onclick=()=>{
     choosePage(pg.id);modal('Add code block',field('Block name','<input id="blockName" placeholder="e.g. Sidebar">')+field('HTML and CSS','<textarea id="blockHTML" rows="8" spellcheck="false">&lt;aside&gt;Sidebar&lt;/aside&gt;</textarea>')+'<div class="dialogActions">'+btn('commit-code-block','Insert block','','btn primary')+'</div>');

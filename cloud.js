@@ -10,12 +10,25 @@ async function api(path,method='GET',body=null,token=null,prefer=null){
  if(token)headers.Authorization='Bearer '+token;if(prefer)headers.Prefer=prefer;
  const res=await fetch(personalApi+path,{method,headers,body:body===null?undefined:JSON.stringify(body),cache:'no-store',referrerPolicy:'no-referrer'});
  const text=await res.text();let data;try{data=text?JSON.parse(text):null}catch{throw Error('Supabase returned an unreadable response.')}
- if(!res.ok){if(res.status===409)throw Error('A newer cloud copy exists. Open it first. Your device edits will be kept as a separate copy.');throw Error(data?.msg||data?.message||data?.error_description||'Supabase request failed ('+res.status+').')}
+ if(!res.ok){if(res.status===409)throw Error('A newer cloud copy exists. Open it first. Your device edits will be kept as a separate copy.');const err=Error(data?.msg||data?.message||data?.error_description||'Supabase request failed ('+res.status+').');err.code=data?.error_code;throw err}
  return data
 }
+let refreshInFlight=null;
 async function session(){
  if(!studioSession)throw Error('Sign in to your Personal Ledger Supabase account first.');
- if((studioSession.expires_at||0)*1000<Date.now()+45000){const next=await api('/auth/v1/token?grant_type=refresh_token','POST',{refresh_token:studioSession.refresh_token});keepSession(next)}return studioSession
+ const current=studioSession;
+ if((current.expires_at||0)*1000>=Date.now()+45000)return current;
+ if(refreshInFlight?.current===current)return refreshInFlight.promise;
+ const promise=api('/auth/v1/token?grant_type=refresh_token','POST',{refresh_token:current.refresh_token}).then(next=>{
+   if(studioSession!==current)throw Error('The signed-in account changed. Try again.');
+   keepSession(next);return next;
+ }).catch(error=>{
+   if(studioSession===current&&['refresh_token_not_found','refresh_token_already_used','session_not_found','session_expired'].includes(error.code)){
+     keepSession(null);throw Error('Sign in again to sync. Your edits are saved on this device.');
+   }
+   throw error;
+ }).finally(()=>{if(refreshInFlight?.current===current)refreshInFlight=null});
+ refreshInFlight={current,promise};return promise;
 }
 const projectsApi='/rest/v1/form_studio_projects';
 function cloudBase(owner,id){
@@ -51,7 +64,7 @@ function accountDialog(){
    const email=$('#cloudEmail').value.trim(),password=$('#cloudPass').value;
    cloudTask(async()=>{
      const account=await api(register?'/auth/v1/signup':'/auth/v1/token?grant_type=password','POST',{email,password});
-     if(!account.access_token){$('#cloudNote').textContent='Check your email for confirmation, then return here and sign in.';return}
+     if(!account.access_token){const message='Check your email for confirmation, then return here and sign in.';if(form.isConnected)$('#cloudNote').textContent=message;else toast(message);return}
      keepSession(account);return 'Signed in';
    });
  }
@@ -60,11 +73,11 @@ function accountDialog(){
 async function cloudTask(fn){
  if(cloudBusy)return;cloudBusy=true;
  const controls=$$('.dialog button,.dialog input');controls.forEach(el=>el.disabled=true);
- try{const msg=await fn();if(msg){cloudBusy=false;cloudDialog();toast(msg);queueCloud()}}catch(e){if($('#cloudNote'))$('#cloudNote').textContent=e.message;else toast(e.message)}finally{cloudBusy=false;controls.forEach(el=>el.disabled=false)}
+ try{const msg=await fn();if(msg){cloudBusy=false;cloudDialog();toast(msg);resumeCloudSaves()}}catch(e){if($('#cloudNote'))$('#cloudNote').textContent=e.message;else toast(e.message)}finally{cloudBusy=false;controls.forEach(el=>el.disabled=false)}
 }
 async function saveCloud(){
  if(!write())throw Error('Save or download your device changes first.');
- if(autoSending)throw Error('A cloud save is in progress. Try again in a moment.');
+ await uploadFinished;
  await uploadProject(deviceRecord(activeFileId),await session());return 'Project saved to your personal cloud';
 }
 async function uploadProject(row,s){
@@ -83,8 +96,10 @@ async function uploadProject(row,s){
 }
 async function openCloud(id){
  if(!isFileId(id)||!write())return;
+ const originFile=activeFileId,dialog=$('.dialog');await uploadFinished;
  const s=await session(),owner=s.user.id;
  const rows=await api(projectsApi+'?owner_id=eq.'+owner+'&project_id=eq.'+id+'&select=revision,document','GET',null,s.access_token);
+ if(studioSession?.user.id!==owner||activeFileId!==originFile||!dialog?.isConnected)return;
  if(!rows.length)throw Error('This cloud project is unavailable.');
  const remote=rows[0],doc=validateImport(remote.document),local=deviceRecord(id);
  if(local&&JSON.stringify(local.document)!==JSON.stringify(doc)&&cloudBase(owner,id).deviceRevision!==local.revision){
@@ -96,29 +111,37 @@ async function openCloud(id){
 restoreSession();
 
 // Upload project edits after the project's first cloud save. No background polling.
-let autoSending=false;
+let autoSending=false,uploadFinished=Promise.resolve();
 const autoKey=(owner,id)=>'formstudio.cloud.manual.'+owner+'.'+id;
 function autoEnabled(owner,id){return localStorage.getItem(autoKey(owner,id))!=='yes'}
-function queueCloud(delay=1300) {
+function queueCloud(delay=1300,id=activeFileId) {
   if(!studioSession||!storageOK)return;
-  const owner=studioSession.user.id,id=activeFileId,base=cloudBase(owner,id);
-  if(!base.revision||base.deviceRevision===deviceRevision||!autoEnabled(owner,id))return;
+  const owner=studioSession.user.id,base=cloudBase(owner,id);
+  if(!base.revision||!autoEnabled(owner,id)||!navigator.onLine)return;
+  const local=deviceRecord(id);if(!local||base.deviceRevision===local.revision)return;
   async function send(){
     if(!studioSession||studioSession.user.id!==owner||!autoEnabled(owner,id))return;
-    if(autoSending||cloudBusy){setTimeout(send,1200);return}
-    autoSending=true;
+    if(!navigator.onLine)return;
+    if(autoSending||cloudBusy){queueCloud(1200,id);return}
+    autoSending=true;let finishUpload;uploadFinished=new Promise(done=>{finishUpload=done});
     try{
       const row=deviceRecord(id);if(!row||cloudBase(owner,id).deviceRevision===row.revision)return;
       await uploadProject(row,await session());
-      if(activeFileId===id)$('#saveStatus').textContent='Saved on this device and in cloud';
+      if(studioSession?.user.id===owner&&activeFileId===id&&deviceRecord(id)?.revision===row.revision)$('#saveStatus').textContent='Saved on this device and in cloud';
     }catch(e){
       if(activeFileId===id)$('#saveStatus').textContent='Saved on device · cloud pending';
       if(navigator.onLine&&activeFileId===id)toast(e.message);
-    }finally{autoSending=false}
+    }finally{autoSending=false;finishUpload()}
   }
   // A separate timer per project preserves a pending upload when switching files.
   const k=owner+'.'+id;clearTimeout(pendingCloudTimers.get(k));
   pendingCloudTimers.set(k,setTimeout(()=>{pendingCloudTimers.delete(k);send()},delay));
 }
 const pendingCloudTimers=new Map();
-window.addEventListener('online',()=>queueCloud());
+function resumeCloudSaves(){
+ if(!studioSession||!storageOK||!navigator.onLine)return;
+ const prefix='formstudio.cloud.base.'+studioSession.user.id+'.';
+ const ids=new Set([activeFileId,...Object.keys(localStorage).filter(k=>k.startsWith(prefix)).map(k=>k.slice(prefix.length))]);
+ for(const id of ids)if(isFileId(id))queueCloud(1300,id);
+}
+window.addEventListener('online',resumeCloudSaves);

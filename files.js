@@ -17,7 +17,7 @@ function deviceFiles() {
   return Object.keys(localStorage).filter(key => key.startsWith(filePrefix)).flatMap(key => {
     try {
       const row = deviceRecord(key.slice(filePrefix.length));
-      return row?.document?.pages?.length ? [row] : [];
+      return row?.document?.pages?.length && isFileId(row.id) && filePrefix+row.id===key ? [row] : [];
     } catch { return []; }
   }).sort((a,b) => b.modified - a.modified);
 }
@@ -33,7 +33,12 @@ function saveDevice(document, id, expected) {
 function restoreDevice() {
   let tabId;
   try { tabId=sessionStorage.getItem(lastFileKey); } catch {}
-  let row = deviceRecord(tabId) || deviceRecord(localStorage.getItem(lastFileKey)) || deviceFiles()[0];
+  let row;
+  const candidates=new Set([tabId,localStorage.getItem(lastFileKey),...Object.keys(localStorage).filter(k=>k.startsWith(filePrefix)).map(k=>k.slice(filePrefix.length))]);
+  for(const id of candidates){
+    try{const candidate=deviceRecord(id);if(!candidate||!isFileId(candidate.id)||candidate.id!==id)continue;validateImport(candidate.document);row=candidate;break}
+    catch{loadNote='A saved project could not be read. Its device copy has been kept.'}
+  }
   if (!row) {
     const old = localStorage.getItem('formstudio.workspace.v1');
     row = saveDevice(old ? validateImport(JSON.parse(old)) : intro(), old ? legacyFileId : crypto.randomUUID(), null);
@@ -42,11 +47,12 @@ function restoreDevice() {
   return row.document;
 }
 function openRecord(row) {
+  validateImport(row.document);
   endReferencePick(); closeSide(); dismiss();
   activeFileId=row.id; deviceRevision=row.revision; rememberFile(row.id);
   project=row.document; pageId=project.pages[0].id; selected=[]; past=[]; future=[];
-  multi=false; gesture=null; mode='design'; codeDirty=false; panMode=false; zoomFactor=1; pan=[0,0];
-  storageOK=true; $('#saveStatus').textContent='Saved on this device'; render();
+  multi=false; gesture=null; mode='design'; panMode=false; zoomFactor=1; pan=[0,0];
+  storageOK=true; $('#saveStatus').textContent='Saved on this device'; render();if(studioSession)queueCloud();
 }
 function saveNewDocument(doc) {
   const row=saveDevice(doc,crypto.randomUUID(),null);

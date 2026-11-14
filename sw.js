@@ -1,7 +1,7 @@
 'use strict';
 
 // Bump with each editor shell release. Old tabs finish using their original bundle.
-const SHELL_VERSION = 'panels2';
+const SHELL_VERSION = 'account3';
 const scope = new URL(self.registration.scope);
 const indexURL = new URL('index.html', scope).href;
 const cachePrefix = 'form-studio-shell:' + scope.href + ':';
@@ -60,7 +60,7 @@ function prepareShell() {
   if (!preparing) preparing = cacheShell().finally(() => { preparing = null; });
   return preparing;
 }
-self.addEventListener('install', event => { event.waitUntil(prepareShell()); });
+self.addEventListener('install', event => { event.waitUntil(prepareShell().then(()=>self.skipWaiting())); });
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     await Promise.all((await caches.keys()).filter(key => key.startsWith(cachePrefix) && key !== cacheName).map(key => caches.delete(key)));
@@ -81,6 +81,8 @@ self.addEventListener('fetch', event => {
   const request = event.request, url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== scope.origin) return;
   const landing = request.mode === 'navigate' && (url.pathname === scope.pathname || url.pathname === new URL(indexURL).pathname);
+  const accountPage=request.mode==='navigate' && url.pathname===new URL('account.html',scope).pathname;
+  if (accountPage){event.respondWith(fetch(request).catch(async()=>{const cache=await caches.open(cacheName);return await cache.match(indexURL)||Response.error()}));return}
   if (!landing && !editorAsset(url)) return;
   event.respondWith((async () => {
     const cache = await caches.open(cacheName);

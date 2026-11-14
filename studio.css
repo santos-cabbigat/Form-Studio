@@ -40,3 +40,11 @@ body.locked>:not(#ownerEntrance):not(script){display:none!important}#ownerEntran
 #grip{position:fixed;z-index:9;width:12px;touch-action:none;cursor:col-resize}#grip:hover,#grip:focus-visible{background:#7647c84d}#dockPanel{display:none}.floatingInspector #dockPanel,.wideCode #dockPanel{display:block}.inspector.floatingInspector,.inspector.floatingInspector.shown{position:fixed;right:0;top:152px;bottom:0;width:min(var(--panel-size,350px),calc(100vw - 14px));z-index:8;background:white;box-shadow:-5px 0 20px #241d3020;display:block}main:has(.floatingInspector) .workspace,main:has(.wideCode) .workspace{grid-column:2/-1}main.iconRail{grid-template-columns:50px minmax(0,1fr) 258px}.iconRail #library{display:block;position:static;width:auto;border-radius:0}.iconRail .library>*{display:none}.iconRail .library .libSection:has(.cardGrid){display:block;padding:4px}.iconRail .library .sectionTitle,.iconRail .component span{display:none}.iconRail .cardGrid{grid-template-columns:1fr}.iconRail .component{align-items:center;justify-content:center;height:42px;padding:0}.inspector.wideCode{top:152px}
 @media(max-width:850px){.inspector.shown,.library.shown{top:152px}main.iconRail{grid-template-columns:50px minmax(0,1fr)}.inspector.floatingInspector:not(.shown){display:none}.inspector.floatingInspector.shown{bottom:74px}.library.shown{z-index:10}}
 @media(max-width:620px){main{height:calc(100dvh - 137px)}.inspector.shown,.library.shown,.inspector.floatingInspector.shown{top:137px}main:not(.iconRail):has(.floatingInspector) .workspace,main:not(.iconRail):has(.wideCode) .workspace{grid-column:1/-1}}
+
+main.inspectorClosed .inspector{display:none!important}
+main.inspectorClosed .workspace{grid-column:2/-1}
+@media(max-width:620px){main.inspectorClosed:not(.iconRail) .workspace{grid-column:1/-1}}
+#grip{width:16px}
+#grip::after{content:"";display:block;position:absolute;height:54px;width:5px;border-radius:4px;background:#806ba6;top:42%;left:3px}
+.fileBar{overflow-x:auto;white-space:nowrap}.fileBar button{flex-shrink:0}
+@media(max-width:500px){.fileBar{gap:4px;padding-inline:4px}.fileBar .btn{font-size:11px;padding:3px 5px}}

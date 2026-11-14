@@ -23,7 +23,10 @@ function bindPanels(){
  const panel=$('#inspector'),main=document.querySelector('main'),handle=$('#grip'),lib=$('#library');
  function alignGrip(){
    const r=panel.getBoundingClientRect();
-   handle.hidden=r.width===0;handle.style.left=(r.left-5)+'px';handle.style.top=r.top+'px';handle.style.height=r.height+'px';
+   handle.hidden=r.width===0;
+   const toggle=$('#inspectorToggle');
+   toggle.textContent=r.width?'Hide inspector':'Show inspector';
+   toggle.setAttribute('aria-expanded',String(r.width>0));handle.style.left=(r.left-5)+'px';handle.style.top=r.top+'px';handle.style.height=r.height+'px';
  }
  function widen(width){
    main.style.setProperty('--panel-size',Math.min(innerWidth-18,Math.max(216,width))+'px');
@@ -47,5 +50,17 @@ function bindPanels(){
    if(e.target.closest('#openProps'))main.classList.toggle('inspectorClosed',!panel.classList.contains('shown'));
    if(e.target.closest('#dockPanel')){panel.classList.remove('floatingInspector','wideCode');main.style.removeProperty('--panel-size');syncCodeSize(false);alignGrip()}
  });
+ $('#inspectorToggle').onclick=()=>{
+   const open=panel.getBoundingClientRect().width===0;
+   main.classList.toggle('inspectorClosed',!open);panel.classList.toggle('shown',open);
+   if(open)lib.classList.remove('shown');alignGrip();
+ };
+ $('#accountSettings').onclick=()=>{
+   const email=studioSession?.user?.email;
+   modal('Account & settings','<h3>My account</h3><p>'+esc(email||'Unlocked on this device while offline')+'</p><div class="dialogActions">'+btn('cloud',email?'My cloud projects':'Cloud sign-in')+btn('site-logout','Sign out')+'</div><h3>Editor layout</h3><p>Resize the inspector by dragging its marked edge. Dock returns it to its original width.</p><div class="dialogActions"><button class="btn" id="settingsLibrary"></button><button class="btn" id="settingsInspector"></button></div>');
+   for(const [id,control] of [['settingsLibrary','railToggle'],['settingsInspector','inspectorToggle']]){
+     const b=$('#'+id);b.textContent=$('#'+control).textContent;b.onclick=()=>{dismiss();$('#'+control).click()};
+   }
+ };
  alignGrip();
 }

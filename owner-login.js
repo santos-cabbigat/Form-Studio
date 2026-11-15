@@ -6,7 +6,7 @@
  const verifierKey='formstudio.owner.offline.v2';
  const codeLabel=document.getElementById('accessCodeLabel'),repeat=document.getElementById('repeatLabel');
  const modeButtons=[...form.querySelectorAll('[data-auth]')];
- let mode='login',loading=false;
+ let mode='login',loading=false,setupTicket='';
  if(navigator.onLine && 'serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).catch(()=>{});
  localStorage.removeItem('formstudio.owner.offline.v1');
  if(localStorage.getItem('formstudio.rememberEmail')==='yes')fields.email.value=owner;
@@ -24,8 +24,14 @@
  function choose(next){
    mode=next;const create=next!=='login';const setup=next==='setup';
    fields.code.value=fields.password.value=fields.confirm.value='';message.textContent='';
-   codeLabel.hidden=repeat.hidden=!create;fields.code.required=fields.confirm.required=create;
-   codeLabel.firstChild.textContent=setup?'One-time setup code':'Private recovery code';
+   const recovery=next==='recover';
+   codeLabel.hidden=!recovery;
+   fields.code.required=recovery;
+   repeat.hidden=!create;
+   fields.confirm.required=create;
+   document.getElementById('ownerEmailLabel').hidden=setup;
+   if(setup)fields.email.value=owner;
+   if(!setup)setupTicket='';
    document.getElementById('pwdLabel').textContent=create?'New Studio password':'Studio password';
    fields.password.autocomplete=create?'new-password':'current-password';fields.password.minLength=create?8:1;
    submit.textContent=create?(setup?'Create Studio password':'Reset Studio password'):'Sign in';
@@ -37,14 +43,27 @@
  }
  function route(){
    const fragment=location.hash.slice(1);
-   choose(['setup','recover'].includes(fragment)?fragment:'login');
+   const ticket=/^setup=([a-zA-Z0-9_-]{24,128})$/.exec(fragment);
+   if(ticket){
+     setupTicket=ticket[1];
+     window.history.replaceState(window.history.state,'',location.pathname+location.search+'#setup');
+   }
+   if((ticket||fragment==='setup') && setupTicket){
+     choose('setup');
+   }else if(fragment==='setup'){
+     choose('login');
+     message.textContent='For first-time setup, open your private Studio setup link.';
+   }else{
+     choose(fragment==='recover'?'recover':'login');
+   }
  }
  for(const b of modeButtons)b.onclick=()=>{
-   history.replaceState(history.state,'',location.pathname+location.search+(b.dataset.auth==='login'?'':'#'+b.dataset.auth));
+   window.history.replaceState(window.history.state,'',location.pathname+location.search+(b.dataset.auth==='login'?'':'#'+b.dataset.auth));
    route();
-   (fields.email.value && mode!=='login'?fields.code:fields.email).focus();
+   (mode==='setup'?fields.password:mode==='recover'&&fields.email.value?fields.code:fields.email).focus();
  };
  route();
+ window.addEventListener('hashchange',()=>{if(screen.isConnected&&!loading&&!submit.disabled&&document.getElementById('recoveryReceipt').hidden)route()});
  async function proof(password,salt){
    const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits']);
    const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:new Uint8Array(salt),iterations:600000,hash:'SHA-256'},key,256);
@@ -82,9 +101,10 @@
          throw Error('Offline unlock needs the Studio password previously verified in this browser.');
        keepSession(null);await openEditor();return;
      }
-     const result=await studioRequest(mode,{email:owner,password,...(create?{code:fields.code.value.trim()}: {})});
+     const result=await studioRequest(mode,{email:owner,password,...(create?{code:mode==='setup'?setupTicket:fields.code.value.trim()}: {})});
      const {recovery_code,...sessionData}=result;
      if(!sessionData.access_token||sessionData.user?.email!==owner)throw Error('Sign-in did not return your Studio account.');
+     setupTicket='';
      await remember(password);fields.password.value=fields.confirm.value=fields.code.value='';
      if(recovery_code){
        for(const child of form.children)child.hidden=true;
@@ -96,9 +116,14 @@
        };
      }else{keepSession(sessionData);await openEditor()}
    }catch(err){
-     message.textContent=err.message;
+     message.textContent=mode==='setup' && /credentials|codes also expire/i.test(err.message)
+       ?'This setup link is invalid or has expired. Request a new private Studio setup link.':err.message;
      if(mode==='login' && navigator.onLine && /set up studio password first|check your credentials/i.test(err.message)){
        const action=/set up studio password first/i.test(err.message)?'setup':'recover';
+       if(action==='setup'){
+         message.textContent='Open your private Studio setup link to choose your first password.';
+         return;
+       }
        document.getElementById('accessModes').hidden=false;
        for(const b of modeButtons)b.hidden=b.dataset.auth!==action;
      }

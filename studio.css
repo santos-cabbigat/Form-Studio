@@ -64,7 +64,13 @@ main.inspectorClosed .workspace{grid-column:2/-1}
 
 #ownerEntrance h1{margin:0 0 20px;font-size:24px}
 #ownerEntrance [role=status]:empty{display:none}
-#signInHelp{margin-top:16px}
-#signInHelp summary{color:#533387;cursor:pointer;padding:6px 0}
 #accessModes{display:grid;gap:0}
 #accessModes button,#ownerEntrance [data-auth=login]{text-align:left;color:#533387;padding:8px 0}
+
+#ownerEntrance .passwordField{position:relative}
+#ownerEntrance .passwordField input{box-sizing:border-box;width:100%;padding-right:50px;min-height:46px}
+#ownerEntrance label[for^="studio-"]{margin-bottom:4px}
+#ownerEntrance button.eyeToggle{position:absolute;right:1px;top:1px;bottom:1px;display:grid;place-items:center;width:44px;margin:0;padding:0;border:0;background:transparent;color:#553683;cursor:pointer}
+.eyeToggle .eyeSlash{display:none}
+.eyeToggle[aria-pressed="true"] .eyeSlash{display:inline}
+#ownerEntrance .eyeToggle:focus-visible{outline:2px solid #7049a6;outline-offset:-3px}

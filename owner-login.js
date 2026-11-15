@@ -10,6 +10,17 @@
  if(navigator.onLine && 'serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).catch(()=>{});
  localStorage.removeItem('formstudio.owner.offline.v1');
  if(localStorage.getItem('formstudio.rememberEmail')==='yes')fields.email.value=owner;
+ const eyeButtons=[...form.querySelectorAll('[data-eye]')];
+ function setVisible(button,visible){
+   const field=fields[button.dataset.eye];
+   field.type=visible?'text':'password';
+   button.setAttribute('aria-pressed',String(visible));
+   button.setAttribute('aria-label',visible?'Hide password':'Show password');
+ }
+ for(const button of eyeButtons){
+   button.onmousedown=e=>e.preventDefault();
+   button.onclick=()=>setVisible(button,fields[button.dataset.eye].type==='password');
+ }
  function choose(next){
    mode=next;const create=next!=='login';const setup=next==='setup';
    fields.code.value=fields.password.value=fields.confirm.value='';message.textContent='';
@@ -18,12 +29,11 @@
    document.getElementById('pwdLabel').textContent=create?'New Studio password':'Studio password';
    fields.password.autocomplete=create?'new-password':'current-password';fields.password.minLength=create?8:1;
    submit.textContent=create?(setup?'Create Studio password':'Reset Studio password'):'Sign in';
-   const help=document.getElementById('signInHelp');
-   help.open=false;
-   help.hidden=create;
+   document.getElementById('accessModes').hidden=true;
+   for(const button of eyeButtons)setVisible(button,false);
    document.getElementById('authHint').hidden=!create;
    form.querySelector('h1').textContent=create?(setup?'Set up Studio password':'Recover Studio password'):'Oon Jai Form Studio';
-   for(const b of modeButtons)b.hidden=b.dataset.auth==='login'?!create:create;
+   for(const b of modeButtons)b.hidden=b.dataset.auth!=='login'||!create;
  }
  function route(){
    const fragment=location.hash.slice(1);
@@ -63,7 +73,7 @@
    if(fields.email.value.trim().toLowerCase()!==owner){message.textContent='Enter the Studio owner email.';return}
    const password=fields.password.value,create=mode!=='login';
    if(create && password!==fields.confirm.value){message.textContent='Enter the same new password twice.';return}
-   busy(true);message.textContent='Checking…';
+   busy(true);for(const button of eyeButtons)setVisible(button,false);message.textContent='Checking…';
    try{
      if(!navigator.onLine){
        if(create)throw Error('Connect to the internet to set up or recover your password.');
@@ -85,7 +95,14 @@
          try{await openEditor()}catch(err){message.hidden=false;message.textContent=err.message}
        };
      }else{keepSession(sessionData);await openEditor()}
-   }catch(err){message.textContent=err.message}finally{busy(false)}
+   }catch(err){
+     message.textContent=err.message;
+     if(mode==='login' && navigator.onLine && /set up studio password first|check your credentials/i.test(err.message)){
+       const action=/set up studio password first/i.test(err.message)?'setup':'recover';
+       document.getElementById('accessModes').hidden=false;
+       for(const b of modeButtons)b.hidden=b.dataset.auth!==action;
+     }
+   }finally{busy(false)}
  };
  if(studioSession&&navigator.onLine){
    busy(true);try{const s=await session();const user=await studioRequest('verify',{},s.access_token);

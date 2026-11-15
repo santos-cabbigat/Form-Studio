@@ -18,10 +18,23 @@
    document.getElementById('pwdLabel').textContent=create?'New Studio password':'Studio password';
    fields.password.autocomplete=create?'new-password':'current-password';fields.password.minLength=create?8:1;
    submit.textContent=create?(setup?'Create Studio password':'Reset Studio password'):'Sign in';
-   document.getElementById('authHint').textContent=create?'Enter the private code and choose a Studio password with at least 8 characters.':'Use your Form Studio password. First visit? Choose Set up Studio password.';
-   for(const b of modeButtons)b.hidden=b.dataset.auth===next;
+   const help=document.getElementById('signInHelp');
+   help.open=false;
+   help.hidden=create;
+   document.getElementById('authHint').hidden=!create;
+   form.querySelector('h1').textContent=create?(setup?'Set up Studio password':'Recover Studio password'):'Oon Jai Form Studio';
+   for(const b of modeButtons)b.hidden=b.dataset.auth==='login'?!create:create;
  }
- for(const b of modeButtons)b.onclick=()=>choose(b.dataset.auth);
+ function route(){
+   const fragment=location.hash.slice(1);
+   choose(['setup','recover'].includes(fragment)?fragment:'login');
+ }
+ for(const b of modeButtons)b.onclick=()=>{
+   history.replaceState(history.state,'',location.pathname+location.search+(b.dataset.auth==='login'?'':'#'+b.dataset.auth));
+   route();
+   (fields.email.value && mode!=='login'?fields.code:fields.email).focus();
+ };
+ route();
  async function proof(password,salt){
    const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits']);
    const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:new Uint8Array(salt),iterations:600000,hash:'SHA-256'},key,256);

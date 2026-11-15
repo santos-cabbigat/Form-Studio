@@ -61,3 +61,10 @@ main.inspectorClosed .workspace{grid-column:2/-1}
 #ownerEntrance [hidden]{display:none!important}#accessModes{display:flex;flex-wrap:wrap;gap:8px}
 #accessModes button{color:#533387;text-decoration:underline;font-size:13px;padding:3px 0}
 #recoveryReceipt output{display:block;overflow-wrap:anywhere;user-select:all;font-family:monospace;margin:12px 0}
+
+#ownerEntrance h1{margin:0 0 20px;font-size:24px}
+#ownerEntrance [role=status]:empty{display:none}
+#signInHelp{margin-top:16px}
+#signInHelp summary{color:#533387;cursor:pointer;padding:6px 0}
+#accessModes{display:grid;gap:0}
+#accessModes button,#ownerEntrance [data-auth=login]{text-align:left;color:#533387;padding:8px 0}

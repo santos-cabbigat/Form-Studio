@@ -17,7 +17,7 @@ function remember(s=JSON.stringify(project)){past.push(s);if(past.length>24)past
 function change(fn,msg){remember();preserveColumnLinks(project);const before=linkedBeforeEdit();fn();updateLinked(before);clean();const saved=write();render();if(msg&&saved)toast(msg)}
 function clean(){if(!project.pages.some(p=>p.id===pageId))pageId=project.pages[0].id;selected=selected.filter(id=>page().nodes.some(n=>n.id===id))}
 function stepHistory(back){const from=back?past:future,to=back?future:past;if(!from.length)return;to.push(JSON.stringify(project));project=JSON.parse(from.pop());clean();write();render()}
-function dismiss(){ $('#overlay').replaceChildren() }
+function dismiss(){previewObserver.disconnect();$('#overlay').replaceChildren()}
 function modal(title,body,wide=false){$('#overlay').innerHTML='<div class="dialogBg"><section class="dialog '+(wide?'wide':'')+'" role="dialog" aria-modal="true" aria-label="'+esc(title)+'"><header class="dialogHead"><h2>'+esc(title)+'</h2>'+btn('dismiss','Close','close','btn smallBtn')+'</header>'+body+'</section></div>';let first=$('.dialog input,.dialog select,.dialog textarea');if(first&&!first.readOnly&&first.tagName!=='TEXTAREA')first.focus()}
 function closeSide(){for(const s of ['.library','.inspector'])$(s).classList.remove('shown')}
 function choosePage(id){endReferencePick();closeSide();panMode=false;pageId=id;selected=[];multi=false;zoomFactor=1;pan=[0,0];dismiss();render()}
@@ -67,7 +67,7 @@ function drawBoard(){
  let next=s.firstElementChild;
  for(const n of pg.nodes){
    if(n.hide?.[device])continue;
-   const b=boxFor(n,device,project,pg),signature=JSON.stringify([n.type,n.name,n.text,n.labelParts,n.style,n.extraCSS,n.inputType,n.requirement,n.initialState,n.emptyMessage,n.picker]);
+   const b=boxFor(n,device,project,pg),signature=JSON.stringify([n.type,n.name,n.text,n.labelParts,n.glyph,n.style,n.extraCSS,n.inputType,n.requirement,n.initialState,n.emptyMessage,n.picker]);
    let entry=canvasLayers.get(n.id);
    if(!entry){const wrap=document.createElement('div');wrap.className='nodeWrap';wrap.dataset.id=n.id;entry={wrap};canvasLayers.set(n.id,entry)}
    const wrap=entry.wrap;
@@ -116,7 +116,7 @@ function drawLibrary(){
  if(tab==='Insert'){
  const match=t=>t.toLowerCase().includes(search.toLowerCase());
  pane='<div class="libTop"><h2>Component library</h2><label class="search">'+icon('search',14)+'<input id="search" placeholder="Find a component" aria-label="Find a component" value="'+esc(search)+'"><kbd>/</kbd></label></div>';
- const cards=types.filter(match);pane+=section('Elements',cards.length?'<div class="cardGrid">'+cards.map(t=>'<button class="component" data-insert="'+t+'" draggable="true" aria-label="'+t+'" title="'+t+'">'+icon(categoryIcon(t),19)+'<span>'+t+'</span></button>').join('')+'</div>':'<span class="hint">No matching elements.</span>');
+ const cards=types.filter(t=>match(t)||(t==='Icon'&&Object.values(uiIcons).some(match)));pane+=section('Elements',cards.length?'<div class="cardGrid">'+cards.map(t=>'<button class="component" data-insert="'+t+'" draggable="true" aria-label="'+t+'" title="'+t+'">'+icon(categoryIcon(t),19)+'<span>'+t+'</span></button>').join('')+'</div>':'<span class="hint">No matching elements.</span>');
  if(match('Import editable HTML and CSS'))pane+=preset('import-html','Import editable HTML','code');
  pane+=section('Screen templates',[['signin','Sign-in screen','page',''],['ledger','Account ledger','table','mint'],['sample-entry','Sample entry form','input','mint'],['linked-entry','Entry & ledger tabs','table','mint'],['picker-demo','Picker with buttons','picker','mint'],['blank','Blank screen','insert','sand']].filter(a=>match(a[1])).map(a=>preset(...a)).join(''));
  pane+=section('My templates',templateRows(search)+btn('new-template','Add template','plus','addTemplate'));
@@ -141,15 +141,15 @@ function syncCodeSize(expanded){
  if(control){control.textContent=expanded?'Reduce code panel':'Expand code';control.setAttribute('aria-pressed',String(Boolean(expanded)))}
 }
 function drawProps(){
- const n=sel(),head='<div class="insHead"><h2>Inspector</h2><button id="dockPanel">Dock</button>'+icon('sliders',16)+'</div><div style="padding:0 15px 13px"><div class="seg"><button data-mode="design" class="'+(mode==='design'?'active':'')+'">'+icon('sliders',13)+'Design</button><button data-mode="code" class="'+(mode==='code'?'active':'')+'">'+icon('code',13)+'Code</button></div></div>';let body='';
+ const n=sel(),head='<div class="insHead"><h2>Inspector</h2><button id="dockPanel" title="Restore default inspector size">Reset size</button>'+icon('sliders',16)+'</div><div style="padding:0 15px 13px"><div class="seg"><button data-mode="design" class="'+(mode==='design'?'active':'')+'">'+icon('sliders',13)+'Design</button><button data-mode="code" class="'+(mode==='code'?'active':'')+'">'+icon('code',13)+'Code</button></div></div>';let body='';
  if(mode==='code'){body=codePanel()}
  else if(!n){body='<div class="part"><h3>'+esc(page().name)+'</h3><p class="hint">Open Code to copy this entire '+page().kind+', or select a layer.</p>'+btn('page-settings','Screen settings','page')+'</div>'}
  else if(selected.length>1){body=groupPanel()}
  else{
  const b=boxFor(n,device,project,page());
- body='<div class="part"><div class="typeLine"><span class="typeIcon">'+icon(categoryIcon(n.type),17)+'</span><div><strong>'+esc(n.type)+'</strong><small>Selected element</small></div></div>'+field('Layer name',prop('name',n.name))+(['Button','Text','Input'].includes(n.type)?field(n.type==='Input'?'Placeholder':'Label',prop('text',n.text)):'')+dataInspector(n)+(n.type==='Image'?btn('replace-image','Replace image','image','btn smallBtn'):'')+'</div>';
+ body='<div class="part"><div class="typeLine"><span class="typeIcon">'+icon(categoryIcon(n.type),17)+'</span><div><strong>'+esc(n.type)+'</strong><small>Selected element</small></div></div>'+field('Layer name',prop('name',n.name))+(['Button','Text','Input'].includes(n.type)?field(n.type==='Input'?'Placeholder':'Label',prop('text',n.text)):'')+(n.type==='Icon'?field('Icon','<select id="glyphChoice">'+options(Object.entries(uiIcons),n.glyph)+'</select>'):'')+dataInspector(n)+(n.type==='Image'?btn('replace-image','Replace image','image','btn smallBtn'):'')+'</div>';
  body+='<div class="part"><h3>Position & size</h3><div class="grid2">'+['X','Y','W','H'].map((k,i)=>'<label class="dim">'+k+'<input type="number" aria-label="'+k+'" data-box="'+i+'" value="'+b[i]+'"></label>').join('')+'</div></div>';
- body+='<div class="part"><h3>Appearance</h3>'+colorControl('Fill','fill',n.style.fill)+colorControl('Text','color',n.style.color)+'<label class="propRow">Corner radius<span class="dim" style="width:102px"><input type="number" min="0" data-style="radius" value="'+n.style.radius+'">px</span></label><label class="propRow">Font size<span class="dim" style="width:102px"><input type="number" min="1" data-style="fontSize" value="'+n.style.fontSize+'">px</span></label></div>';
+ body+='<div class="part"><h3>Appearance</h3>'+colorControl('Fill','fill',n.style.fill)+colorControl(n.type==='Icon'?'Icon color':'Text','color',n.style.color)+'<label class="propRow">Corner radius<span class="dim" style="width:102px"><input type="number" min="0" data-style="radius" value="'+n.style.radius+'">px</span></label><label class="propRow">Font size<span class="dim" style="width:102px"><input type="number" min="1" data-style="fontSize" value="'+n.style.fontSize+'">px</span></label></div>';
  body+='<div class="part"><h3>Interactions</h3>'+triggerList(n)+'</div><div class="part">'+btn('save-selected','Save as template','library','btn full')+'</div>'
  }
  if(mode==='design'&&n)body+=linkedPart();
@@ -204,10 +204,17 @@ function parseElement(n,code){
  else{
  if(doc.querySelector('script,iframe,object,embed,link'))throw Error('Use My templates → Embedded HTML for a self-contained widget.');
  const styles=[...doc.querySelectorAll('style')];for(const style of styles)style.remove();
- const el=doc.body.firstElementChild,tags={Text:'DIV',Button:'BUTTON',Input:pickerKind(n)?'BUTTON':n.inputType==='select'?'SELECT':'INPUT',Table:'DIV',Image:'IMG',Module:'DIV',Shape:'DIV'};
- if(!el||el.tagName!==tags[n.type]||doc.body.children.length!==1)throw Error('Keep the '+tags[n.type].toLowerCase()+' root, or import this as an embedded template.');
+ const el=doc.body.firstElementChild,tags={Icon:n.actions.length?'BUTTON':'SPAN',Text:'DIV',Button:'BUTTON',Input:pickerKind(n)?'BUTTON':n.inputType==='select'?'SELECT':'INPUT',Table:'DIV',Image:'IMG',Module:'DIV',Shape:'DIV'};
+ if(!el||(n.type==='Icon'?!['BUTTON','SPAN'].includes(el.tagName):el.tagName!==tags[n.type])||doc.body.children.length!==1)throw Error('Keep the '+tags[n.type].toLowerCase()+' root, or import this as an embedded template.');
  for(const style of styles)for(const r of declarations(style.textContent)){if(!r.style||!el.matches(r.selectorText))throw Error('Use a rule that matches the selected layer.');readStyles(draft,r.style,b)}
  readStyles(draft,el.style,b);
+ if(n.type==='Icon'){
+   const key=el.dataset.studioIcon;
+   if(!Object.hasOwn(uiIcons,key))throw Error('Choose a library name for data-studio-icon.');
+   const shape=el.querySelector('svg');
+   if(![key,n.glyph].some(g=>shape?.innerHTML===new DOMParser().parseFromString(icon(g,24),'text/html').querySelector('svg').innerHTML))throw Error('Set data-studio-icon to change the library icon. Use an embedded component for custom SVG paths.');
+   draft.glyph=key;draft.name=el.getAttribute('aria-label')||n.name;
+ }
  if(['Button','Text'].includes(n.type)){
    draft.text=el.textContent;
    if(el.children.length){draft.labelParts=readLabelParts(el);labelHTML(draft.labelParts)}
@@ -242,6 +249,7 @@ function addScreen(type){
  createDestinations(p,companions);
 }
 function variantDialog(type,at){
+ if(type==='Icon'){insertIconDialog(at);return}
  modal('Insert '+type.toLowerCase(),('<p class="hint">Choose a starting design or add one of your own.</p>')+variants[type].map((v,i)=>'<button class="variant" data-variant="'+i+'"><span>'+icon(categoryIcon(type))+v+'</span>'+icon('plus',15)+'</button>').join('')+project.templates.filter(t=>t.kind==='element'&&(pickerKind(t.node)?'Picker':t.node.type)===type||t.kind==='block'&&type==='Module'||t.kind==='window'&&type==='Window'||t.kind==='element'&&t.category===type).map(t=>preset('use-'+t.id,t.name,'library')).join('')+btn('type-template','Add a template','plus','addTemplate'));
  $('[data-cmd=type-template]').onclick=()=>templateDialog(null,type==='Button'?'button':'embed',type);
  $$('.dialog [data-variant]').forEach(el=>el.onclick=()=>{const ver=variants[type][+el.dataset.variant];
@@ -302,6 +310,15 @@ function manageTemplate(t){
  if(!t.layout)$('[data-cmd=edit-template]').onclick=()=>{if(t.kind==='trigger')triggerTemplate(null,t);else if(t.node.type==='Custom')templateDialog(t);else modal(t.name,field('Component code','<textarea readonly rows="14">'+esc(sourceFor(t.node))+'</textarea>')+'<p class="hint">Insert a copy, edit its code, and save it as a new template.</p>')};
  $('[data-cmd=remove-template]').onclick=()=>{change(()=>project.templates=project.templates.filter(v=>v.id!==t.id));dismiss()}
 }
+function fitPreviewFrame(){
+ const frame=$('.previewBg iframe');if(!frame)return;
+ const stage=frame.closest('.previewStage'),box=frame.parentElement,layout=$('#previewDevice').value;
+ const width=project.widths[layout],height=devices[layout][1]+Number(frame.dataset.navHeight||0);
+ const scale=Math.min(1,Math.max(1,stage.clientWidth-24)/width,Math.max(1,stage.clientHeight-24)/height);
+ Object.assign(box.style,{width:width*scale+'px',height:height*scale+'px'});
+ Object.assign(frame.style,{width:width+'px',height:height+'px',transform:'scale('+scale+')'});
+}
+const previewObserver=new ResizeObserver(fitPreviewFrame);
 window.addEventListener('message',event=>{
  const frame=$('.previewBg iframe');
  if(!frame||event.source!==frame.contentWindow)return;
@@ -312,18 +329,22 @@ window.addEventListener('message',event=>{
  if(event.data?.type!=='form-studio-location')return;
  const current=project.pages.find(pg=>pg.id===event.data.page);
  if(current)$('#previewPageName').textContent=current.name;
+ const navHeight=event.data.navHeight;
+ if(Number.isFinite(navHeight)&&navHeight>=0&&navHeight<=160&&event.data.layout===$('#previewDevice').value){
+   frame.dataset.navHeight=String(navHeight);fitPreviewFrame();
+ }
 });
 function preview(d=device,dataState='design',response='success'){
- closeSide();$('#overlay').innerHTML='<section class="previewBg" role="dialog" aria-label="Interactive preview"><div class="previewBar"><strong>'+icon('preview',15)+' Preview · <span id="previewPageName">'+esc(page().name)+'</span></strong><select id="previewDevice" aria-label="Preview device">'+options(Object.keys(devices).map(k=>[k,cap(k)+' · '+project.widths[k]+' px']),d)+'</select>'+(tablesInProject().length?'<select id="previewState" aria-label="Preview data">'+options([['design','As designed'],['empty','Empty tables'],['sample','Sample rows']],dataState)+'</select>':'')+(project.pages.some(pg=>pg.nodes.some(n=>n.actions.some(a=>saveTypes.includes(a.action))))?'<select id="previewResponse" aria-label="Save response">'+options([['success','Successful save'],['saving','Saving'],['failed','Save failed'],['offline','Offline']],response)+'</select>':'')+btn('dismiss','Back to editor','close','btn smallBtn')+'</div><iframe title="Interactive design preview" sandbox="allow-scripts allow-modals"></iframe></section>';
+ closeSide();$('#overlay').innerHTML='<section class="previewBg" role="dialog" aria-label="Interactive preview"><div class="previewBar"><strong>'+icon('preview',15)+' Preview · <span id="previewPageName">'+esc(page().name)+'</span></strong><select id="previewDevice" aria-label="Preview device">'+options(Object.keys(devices).map(k=>[k,cap(k)+' · '+project.widths[k]+' × '+devices[k][1]]),d)+'</select>'+(tablesInProject().length?'<select id="previewState" aria-label="Preview data">'+options([['design','As designed'],['empty','Empty tables'],['sample','Sample rows']],dataState)+'</select>':'')+(project.pages.some(pg=>pg.nodes.some(n=>n.actions.some(a=>saveTypes.includes(a.action))))?'<select id="previewResponse" aria-label="Save response">'+options([['success','Successful save'],['saving','Saving'],['failed','Save failed'],['offline','Offline']],response)+'</select>':'')+btn('dismiss','Back to editor','close','btn smallBtn')+'</div><div class="previewStage"><div class="previewFrameSize"><iframe title="Interactive design preview" sandbox="allow-scripts allow-modals"></iframe></div></div></section>';
  const frame=$('.previewBg iframe');
  function updatePreview(){
    const layout=$('#previewDevice').value;
-   frame.style.width=project.widths[layout]+'px';
+   fitPreviewFrame();
    const sequence=Number(frame.dataset.sequence||0)+1;frame.dataset.sequence=sequence;
    frame.inert=true;frame.setAttribute('aria-busy','true');
    frame.contentWindow.postMessage({type:'form-studio-preview',sequence,device:layout,dataState:$('#previewState')?.value||'design',response:$('#previewResponse')?.value||'success'},'*');
  }
- frame.style.width=project.widths[d]+'px';frame.onload=()=>{if(frame.isConnected)updatePreview()};
+ previewObserver.disconnect();previewObserver.observe(frame.closest('.previewStage'));fitPreviewFrame();frame.onload=()=>{if(frame.isConnected)updatePreview()};
  frame.srcdoc=buildHTML(project,pageId,d,dataState,response,true);
  for(const control of $$('.previewBar select'))control.onchange=updatePreview;
 }
@@ -338,8 +359,9 @@ function validateImport(p){
  if(p.pages.some(pg=>pg?.backgrounds&&(typeof pg.backgrounds!=='object'||Object.entries(pg.backgrounds).some(([d,color])=>!Object.hasOwn(devices,d)||!validPaint(color)))))throw Error('A screen background is invalid.');
  if(p.pages.some(pg=>!pg||pg.devNote!==undefined&&typeof pg.devNote!=='string'))throw Error('Screen notes must be text.');
  if(!p.palette.every(hex)||!hex(p.theme.accent)||!hex(p.theme.background)||!families.includes(p.theme.font)||Object.keys(devices).some(d=>!sizes[d].includes(p.widths?.[d])))throw Error('Project theme or device settings are invalid.');
- const checkNode=n=>{if(!n||!id(n.id)||!['Button','Text','Input','Image','Module','Shape','Table','Custom'].includes(n.type)||typeof n.name!=='string'||!n.style||!n.boxes?.laptop||!Array.isArray(n.actions)||Object.values(n.boxes).some(b=>!Array.isArray(b)||b.length!==4||b.some(v=>!Number.isFinite(v)))||n.style.radius<0||!Number.isFinite(n.style.radius)||!Number.isFinite(n.style.fontSize))throw Error('A component in the project is invalid.');
+ const checkNode=n=>{if(!n||!id(n.id)||!['Button','Text','Input','Image','Module','Shape','Table','Custom','Icon'].includes(n.type)||typeof n.name!=='string'||!n.style||!n.boxes?.laptop||!Array.isArray(n.actions)||Object.values(n.boxes).some(b=>!Array.isArray(b)||b.length!==4||b.some(v=>!Number.isFinite(v)))||n.style.radius<0||!Number.isFinite(n.style.radius)||!Number.isFinite(n.style.fontSize))throw Error('A component in the project is invalid.');
  if(n.devNote!==undefined&&typeof n.devNote!=='string'||n.locked!==undefined&&typeof n.locked!=='boolean')throw Error('A layer note or lock setting is invalid.');
+ if(n.type==='Icon'&&!Object.hasOwn(uiIcons,n.glyph))throw Error('Choose a supported UI icon.');
  if(n.labelParts!=null)labelHTML(n.labelParts);
  if(n.group!==undefined&&!id(n.group))throw Error('A group ID is invalid.');
  if(n.type==='Input'&&n.choices!==undefined&&typeof n.choices!=='string')throw Error('Dropdown choices must be text.');if(n.actions.some(a=>a.action==='saveRow'&&(!Array.isArray(a.fields)||a.fields.some(k=>k!==''&&!id(k))||typeof a.message!=='string')))throw Error('A save trigger has invalid fields.');if(n.type==='Image'&&!/^data:image\/(png|jpeg|webp|gif);base64,/i.test(n.src||''))throw Error('This project has an unsupported image source.');
@@ -410,6 +432,7 @@ document.addEventListener('change',e=>{
  if(!n)return;
  if(t.dataset.pickerSetting){const k=t.dataset.pickerSetting;if(!t.checkValidity()||(!t.value&&k!=='footerButton'))return;change(()=>{n.picker={...n.picker,[k]:t.type==='number'?Number(t.value):t.value}});return}
  if(t.dataset.choiceLabel!==undefined||t.dataset.choiceValue!==undefined){editPickerChoice(Number(t.dataset.choiceLabel??t.dataset.choiceValue),t.dataset.choiceLabel!==undefined?'label':'value',t.value);return}
+ if(t.id==='glyphChoice'&&n.type==='Icon'&&Object.hasOwn(uiIcons,t.value))change(()=>n.glyph=t.value);
  if(t.dataset.prop)change(()=>{n[t.dataset.prop]=t.value;if(t.dataset.prop==='text'&&n.labelParts)delete n.labelParts});
  if(t.dataset.box!==undefined){let b=boxFor(n,device,project,pg);if(!t.value.trim()||!Number.isFinite(+t.value))return;b[+t.dataset.box]=+t.value;change(()=>setBox(n,b,device,project,pg))}
  if(t.dataset.style){const k=t.dataset.style;change(()=>n.style[k]=['radius','fontSize'].includes(k)?Math.max(k==='radius'?0:1,+t.value):t.value)}
@@ -425,7 +448,7 @@ const stage=$('#stage');
 const boardViewport=document.createElement('div');boardViewport.id='boardViewport';
 stage.insertBefore(boardViewport,$('#sheetWrap'));boardViewport.append($('#sheetWrap'));
 stage.addEventListener('pointerdown',e=>{
- if(e.button!==0||e.target.closest('.floatTools,#referenceNotice'))return;closeSide();const wrap=e.target.closest('.nodeWrap');if(!wrap&&!panMode){selectIds([]);return}
+ if(e.button!==0||e.target.closest('.floatTools,#referenceNotice'))return;$('#library').classList.remove('shown');const wrap=e.target.closest('.nodeWrap');if(!wrap&&!panMode){selectIds([]);return}
  e.preventDefault();stage.setPointerCapture(e.pointerId);
  if(panMode){gesture={pan:[...pan],scrollTop:boardViewport.scrollTop,x:e.clientX,y:e.clientY};return}
  const n=page().nodes.find(v=>v.id===wrap.dataset.id),handle=e.target.dataset.handle;

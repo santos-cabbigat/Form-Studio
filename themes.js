@@ -281,7 +281,7 @@ function styleLayerForTheme(n,t){
   const c=t.colors,s=n.style;
   if(['Image','Custom'].includes(n.type))return;
   s.color=c.ink;
-  if(n.type==='Text')return;
+  if(n.type==='Text'||n.type==='Icon')return;
   if(n.type==='Shape'){s.fill=c.tint;return}
   s.fontSize=t.body;
   const width=t.design==='double'?'3px double ':'1px solid ';

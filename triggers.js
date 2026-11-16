@@ -1,6 +1,6 @@
 'use strict';
 
-const triggerLabels={click:'Click / tap',enter:'Press Enter',change:'Value changed',open:'Open window',close:'Close window',fadeClose:'Fade out and close window',fadeMessage:'Fade out message',go:'Go to screen',expand:'Show / expand',collapse:'Hide / collapse',toggle:'Toggle visibility',saveRow:'Save to sample table',saveValue:'Save a preview value',copyValue:'Set another field',passwordDemo:'Simulate password update',clearFields:'Clear chosen fields',message:'Show a message',loadValue:'Read a preview value',pickerAction:'Control a picker',developer:'Developer action',customDemo:'Custom action (simulation)'};
+const triggerLabels={click:'Click / tap',enter:'Press Enter',change:'Value changed',open:'Open window',close:'Close window',fadeClose:'Fade out and close window',fadeMessage:'Fade out message',go:'Go to screen',expand:'Show / expand',collapse:'Hide / collapse',toggle:'Toggle visibility',saveRow:'Save to sample table',saveValue:'Save a preview value',copyValue:'Set another field',togglePassword:'Show / hide password',passwordDemo:'Simulate password update',clearFields:'Clear chosen fields',message:'Show a message',loadValue:'Read a preview value',pickerAction:'Control a picker',developer:'Developer action',customDemo:'Custom action (simulation)'};
 const saveTypes=['saveRow','saveValue','copyValue','passwordDemo'];
 function triggerOK(a){
   if(!a||!['click','enter','change'].includes(a.event)||!Object.hasOwn(triggerLabels,a.action)||['click','enter','change'].includes(a.action))return false;
@@ -50,7 +50,7 @@ function targetChoices(action) {
   if(action==='open'||action==='go')return treePageOptions(action==='open'?'window':'screen');
   if(action==='copyValue'||action==='loadValue')return project.pages.flatMap(pg=>pg.nodes.filter(n=>n.type==='Input'&&n.inputType!=='password').map(n=>[n.id,pg.name+' / '+n.name]));
   if(action==='pickerAction')return inputsOnPage().filter(n=>pickerKind(n)).map(n=>[n.id,n.name]);
-  if(action==='passwordDemo')return inputsOnPage(true).filter(n=>n.inputType==='password').map(n=>[n.id,n.name]);
+  if(action==='passwordDemo'||action==='togglePassword')return inputsOnPage(true).filter(n=>n.inputType==='password').map(n=>[n.id,n.name]);
   if(action==='saveValue')return inputsOnPage().map(n=>[n.id,n.name]);
   return page().nodes.map(n=>[n.id,n.name]);
 }
@@ -104,7 +104,7 @@ function triggerSelect(id,title,choices,value,placeholder='Choose…'){
 function triggerForm(old={}){
   const events=[['click',triggerLabels.click],['enter',triggerLabels.enter]];
   if(sel()?.type==='Input'||old.event==='change')events.push(['change',triggerLabels.change]);
-  const menu=[['save','Save…'],['clearFields','Clear…'],['pickerAction','Control a picker…'],['message','Show a message'],['loadValue','Read a preview value'],['customDemo','Custom action (simulation)'],['developer','Developer action…'],...['open','close','fadeClose','fadeMessage','go','expand','collapse','toggle'].map(k=>[k,triggerLabels[k]])];
+  const menu=[['save','Save…'],['clearFields','Clear…'],['pickerAction','Control a picker…'],['message','Show a message'],['togglePassword',triggerLabels.togglePassword],['loadValue','Read a preview value'],['customDemo','Custom action (simulation)'],['developer','Developer action…'],...['open','close','fadeClose','fadeMessage','go','expand','collapse','toggle'].map(k=>[k,triggerLabels[k]])];
   return field('When','<select id="ev">'+options(events,old.event||'click')+'</select>')+
     triggerSelect('ac','What should happen?',menu,saveTypes.includes(old.action)?'save':old.action,'Choose an action')+'<div id="targetArea"></div>'+
     field('Wait before this action (seconds)','<input id="triggerDelay" type="number" min="0" step="0.001" value="'+esc((old.delayMs||0)/1000)+'">')+
@@ -151,6 +151,7 @@ function wireTargets(old={}){
     }
     if(action==='saveValue'||action==='loadValue')el.innerHTML=target(action==='saveValue'?'Value from':'Put the value in')+key()+hint('This named value lasts for the current preview or exported app session.');
     else if(action==='copyValue')el.innerHTML=triggerSelect('source','Value from',inputsOnPage().map(n=>[n.id,n.name]),current.source)+target('Destination field');
+    else if(action==='togglePassword')el.innerHTML=target('Password field');
     else if(action==='passwordDemo')el.innerHTML=target('Sample password field')+msg('Preview success message','Password update simulated.')+hint('Use a dummy password. Preview discards it after the simulation. A real password change needs an authentication service.');
     else if(action==='pickerAction'){
       el.innerHTML=target('Which picker?')+'<div id="pickOperation"></div>';

@@ -17,23 +17,43 @@ function deleteDestination(id){
 }
 function bindPanels(){
  const panel=$('#inspector'),main=document.querySelector('main'),handle=$('#grip'),lib=$('#library');
+ const stacked=matchMedia('(max-width:620px)');
  function alignGrip(){
-   const r=panel.getBoundingClientRect();
-   handle.hidden=r.width===0;
+   const r=panel.getBoundingClientRect(),open=r.width>0&&r.height>0,vertical=!stacked.matches;
+   handle.hidden=!open;
    const toggle=$('#inspectorToggle');
-   toggle.textContent=r.width?'Hide inspector':'Show inspector';
-   toggle.setAttribute('aria-expanded',String(r.width>0));handle.style.left=(r.left-5)+'px';handle.style.top=r.top+'px';handle.style.height=r.height+'px';
+   toggle.textContent=open?'Hide inspector':'Show inspector';
+   toggle.setAttribute('aria-expanded',String(open));
+   handle.setAttribute('aria-orientation',vertical?'vertical':'horizontal');
+   handle.setAttribute('aria-valuenow',String(Math.round(vertical?r.width:r.height)));
+   Object.assign(handle.style,{left:r.left+'px',top:r.top+'px',
+     width:vertical?'12px':r.width+'px',height:vertical?r.height+'px':'12px'});
  }
- function widen(width){
-   main.style.setProperty('--panel-size',Math.min(innerWidth-18,Math.max(216,width))+'px');
-   panel.classList.add('floatingInspector','shown');alignGrip();
+ function resizePanel(size){
+   const property=stacked.matches?'--custom-height':'--custom-width';
+   main.style.setProperty(property,Math.max(0,size)+'px');
+   panel.classList.add('resizedInspector');
+   if(panel.classList.contains('wideCode'))syncCodeSize(false);
+   alignGrip();
  }
- handle.onpointerdown=e=>{handle.setPointerCapture(e.pointerId);e.preventDefault()};
- handle.onpointermove=e=>{if(handle.hasPointerCapture(e.pointerId))widen(innerWidth-e.clientX)};
- handle.onkeydown=e=>{if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();widen(panel.offsetWidth+(e.key==='ArrowLeft'?20:-20))}};
- new ResizeObserver(alignGrip).observe(panel);window.addEventListener('resize',alignGrip);
- const small=matchMedia('(max-width:850px)');
- small.addEventListener('change',e=>{if(e.matches&&!main.classList.contains('inspectorClosed'))panel.classList.add('shown');alignGrip()});
+ let drag=null;
+ handle.onpointerdown=e=>{
+   if(e.button!==0||drag)return;
+   const horizontal=stacked.matches,r=panel.getBoundingClientRect();
+   drag={id:e.pointerId,horizontal,start:horizontal?e.clientY:e.clientX,size:horizontal?r.height:r.width};
+   handle.setPointerCapture(e.pointerId);e.preventDefault();
+ };
+ handle.onpointermove=e=>{
+   if(drag?.id===e.pointerId)resizePanel(drag.size+drag.start-(drag.horizontal?e.clientY:e.clientX));
+ };
+ handle.onlostpointercapture=()=>{drag=null};
+ handle.onkeydown=e=>{
+   const keys=stacked.matches?['ArrowUp','ArrowDown']:['ArrowLeft','ArrowRight'];
+   if(!keys.includes(e.key))return;
+   e.preventDefault();resizePanel((stacked.matches?panel.offsetHeight:panel.offsetWidth)+(e.key===keys[0]?20:-20));
+ };
+ const observer=new ResizeObserver(alignGrip);observer.observe(panel);observer.observe(main);
+ window.addEventListener('resize',alignGrip);
  function compact(on){
   main.classList.toggle('iconRail',on);$('#railToggle').setAttribute('aria-pressed',String(on));
   $('#railToggle').textContent=on?'Expand library':'Shrink library';
@@ -44,7 +64,7 @@ function bindPanels(){
    if(e.target.closest('[data-tab],#openLib')&&main.classList.contains('iconRail'))compact(false);
    if(e.target.closest('[data-tab]')&&innerWidth<=850)lib.classList.add('shown');
    if(e.target.closest('#openProps'))main.classList.toggle('inspectorClosed',!panel.classList.contains('shown'));
-   if(e.target.closest('#dockPanel')){panel.classList.remove('floatingInspector','wideCode');main.style.removeProperty('--panel-size');syncCodeSize(false);alignGrip()}
+   if(e.target.closest('#dockPanel')){panel.classList.remove('resizedInspector','wideCode');main.style.removeProperty('--custom-width');main.style.removeProperty('--custom-height');syncCodeSize(false);alignGrip()}
  });
  $('#inspectorToggle').onclick=()=>{
    const open=panel.getBoundingClientRect().width===0;

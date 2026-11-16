@@ -1,7 +1,7 @@
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clone=o=>JSON.parse(JSON.stringify(o));
 const uid=()=> 'n'+Math.random().toString(36).slice(2,11);
-const types=['Button','Text','Input','Picker','Image','Module','Window','Table','Shape'];
+const types=['Button','Text','Input','Picker','Icon','Image','Module','Window','Table','Shape'];
 const devices={laptop:[960,600],tablet:[768,760],phone:[390,760]};
 const sizes={laptop:[960,1280,1440],tablet:[768,820,1024],phone:[360,390,430]};
 const cap=x=>x[0].toUpperCase()+x.slice(1);

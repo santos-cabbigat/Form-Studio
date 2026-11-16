@@ -1,5 +1,5 @@
 const nativeCSS=`
-*{box-sizing:border-box}.object{position:absolute;margin:0;line-height:1.25;font-family:inherit;overflow:hidden}.object[data-type=Button]{cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0 8px}.object[data-type=Text]{white-space:pre-wrap;display:flex;align-items:center;line-height:1.18;letter-spacing:-.025em}.object[data-type=Input]{padding:0 14px}.object[data-type=Image]{object-fit:cover;display:block}.object[data-type=Table]{padding:0}.object table{width:100%;border-collapse:collapse;font-size:inherit;color:inherit}.object th,.object td{padding:7px 10px;border-bottom:1px solid #dedbe6;text-align:left}.object th{background:var(--table-tint,#f3effa)}.object[data-type=Custom]{border:0}.object[data-type=Button]:focus-visible,.object[tabindex]:focus-visible{outline:3px solid #8763dd}
+*{box-sizing:border-box}.object{position:absolute;margin:0;line-height:1.25;font-family:inherit;overflow:hidden}.object[data-type=Icon]{display:grid;place-items:center;padding:0}.object[data-type=Icon]>svg{display:block;width:100%;height:100%}button.object[data-type=Icon]{cursor:pointer}.object[data-type=Button]{cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0 8px}.object[data-type=Text]{white-space:pre-wrap;display:flex;align-items:center;line-height:1.18;letter-spacing:-.025em}.object[data-type=Input]{padding:0 14px}.object[data-type=Image]{object-fit:cover;display:block}.object[data-type=Table]{padding:0}.object table{width:100%;border-collapse:collapse;font-size:inherit;color:inherit}.object th,.object td{padding:7px 10px;border-bottom:1px solid #dedbe6;text-align:left}.object th{background:var(--table-tint,#f3effa)}.object[data-type=Custom]{border:0}.object[data-type=Button]:focus-visible,.object[tabindex]:focus-visible{outline:3px solid #8763dd}
 `;
 function cssProps(n,b){let s=n.style;return {left:b[0]+'px',top:b[1]+'px',width:b[2]+'px',height:b[3]+'px','background-color':s.fill,color:s.color,'border-radius':s.radius+'px','font-size':s.fontSize+'px','font-weight':String(s.weight),border:s.border,'text-align':s.align,...n.extraCSS}}
 function labelHTML(parts){
@@ -18,6 +18,10 @@ function labelHTML(parts){
 function markup(n,source=false,rows){
  const type=n.type,formatted=n.labelParts&&['Button','Text'].includes(type),content=formatted?labelHTML(n.labelParts):esc(n.text);
  const label=formatted&&!source?'<span>'+content+'</span>':content;
+ if(type==='Icon'){
+   const interactive=n.actions.length>0,tag=interactive?'button':'span';
+   return '<'+tag+(interactive?' type="button"':' role="img"')+' aria-label="'+esc(n.name)+'" data-studio-icon="'+esc(n.glyph)+'">'+icon(n.glyph,24)+'</'+tag+'>';
+ }
  if(type==='Button')return '<button type="button">'+label+'</button>';
  if(pickerKind(n))return pickerMarkup(n);
  if(type==='Input'){
@@ -44,6 +48,7 @@ function makeEl(n,b,edit=false,rows){
 }
 function runtime(p,mode,start,forcedDevice,response='success',interactivePreview=false){
  const root=document.getElementById('app'),surface=document.createElement('main'),modal=document.createElement('dialog');
+ root.classList.toggle('interactivePreview',interactivePreview);
  const close=document.createElement('button'); close.textContent='Close';close.className='exit';close.setAttribute('aria-label','Close window');
  const inner=document.createElement('div');modal.append(close,inner);root.append(surface,modal);close.onclick=()=>{cancelRuns();closeWindow()};
  let current=p.pages.find(q=>q.id===start)||p.pages[0],shown=null,resize,lastWidth,lastDevice;
@@ -104,6 +109,18 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
  }
  function applyDataAction(a,board,activeLayerId,activeEvent){
    const n=nodes.get(a.target);
+   if(a.action==='togglePassword'){
+     const input=element(a.target,board);
+     if(n?.type!=='Input'||n.inputType!=='password'||!input){notify('Choose a password field on this screen.');return false}
+     const reveal=input.type==='password';input.type=reveal?'text':'password';
+     for(const control of board.querySelectorAll('[data-password-toggle]')){
+       if(control.dataset.passwordToggle!==a.target)continue;
+       control.setAttribute('aria-pressed',String(reveal));
+       control.setAttribute('aria-label',(reveal?'Hide password':'Show password')+' · '+n.name);
+       if(['eye','eyeOff'].includes(control.dataset.studioIcon))control.innerHTML=icon(reveal?'eyeOff':'eye',24);
+     }
+     return true;
+   }
    if(a.action==='saveRow')return saveRow(a,board);
    if(a.action==='developer'){
      document.dispatchEvent(new CustomEvent('formstudio:action',{detail:{name:a.key,screenId:board.dataset.pageId,layerId:activeLayerId,event:activeEvent}}));return true;
@@ -149,9 +166,24 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
    el.addEventListener('change',()=>{if(n.inputType!=='password')values.set(n.id,el.value);act(n,'change',board)});
  }
  if(n.type==='Custom'&&n.actions?.length){const b=boxFor(n,d,p,page),hit=document.createElement('button');hit.className='hit';hit.dataset.hitFor=n.id;if(hidden.has(n.id))hit.style.visibility='hidden';hit.setAttribute('aria-label',n.name);Object.assign(hit.style,{left:b[0]+'px',top:b[1]+'px',width:b[2]+'px',height:b[3]+'px'});board.append(hit);el=hit}
+ const toggle=n.actions?.find(a=>a.action==='togglePassword');
+ if(toggle){
+   el.dataset.passwordToggle=toggle.target;el.setAttribute('aria-pressed','false');
+   el.setAttribute('aria-label','Show password · '+(nodes.get(toggle.target)?.name||'Password'));
+   if(['eye','eyeOff'].includes(n.glyph))el.innerHTML=icon('eye',24);
+   el.addEventListener('mousedown',e=>{if(document.activeElement===element(toggle.target,board))e.preventDefault()});
+ }
  if(n.actions?.length){if(el.tabIndex<0)el.tabIndex=0;
  el.addEventListener('click',()=>act(n,'click',board));el.addEventListener('keydown',e=>{if(e.key==='Enter'&&n.actions.some(a=>a.event==='enter')){e.preventDefault();act(n,'enter',board)}})}
  });
+ for(const control of board.querySelectorAll('[data-studio-icon][data-password-toggle]')){
+   const input=element(control.dataset.passwordToggle,board);
+   if(!input)continue;
+   const ix=input.offsetLeft,iy=input.offsetTop,right=ix+input.offsetWidth,cy=control.offsetTop+control.offsetHeight/2;
+   if(cy>=iy&&cy<=iy+input.offsetHeight&&control.offsetLeft>=ix+input.offsetWidth/2&&control.offsetLeft<right&&control.offsetLeft+control.offsetWidth<=right+1){
+     input.style.paddingRight=Math.max(parseFloat(getComputedStyle(input).paddingRight)||0,right-control.offsetLeft+3)+'px';
+   }
+ }
  }
  // Keep timed actions tied to their interaction. Manual navigation or dismissal
  // cancels the old flow. Navigation performed by a step continues its own flow.
@@ -236,7 +268,7 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
    }
  }
  function reportLocation(){
-   if(interactivePreview&&parent!==window)parent.postMessage({type:'form-studio-location',page:(shown||current).id},'*');
+   if(interactivePreview&&parent!==window)parent.postMessage({type:'form-studio-location',page:(shown||current).id,layout:device(),navHeight:nav.offsetHeight},'*');
  }
  function closeWindow(){shown=null;pickers.close();if(modal.open)modal.close();reportLocation()}
  function show(){if(!shown)return;paint(shown,inner,Math.max(100,innerWidth-46));if(!modal.open)modal.showModal();reportLocation()}
@@ -279,11 +311,11 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
  draw()
 }
 function runtimeCode(){
- const funcs=[esc,cap,boxFor,bounds,cssProps,tableLines,dropdownChoices,tableMarkup,seedRows,columnKeys,mappedFields,pickerKind,pickerFormatOptions,pickerLabel,pickerMarkup,acceptsPickerValue,pickerController,labelHTML,markup,customDoc,makeEl,runtime];
- return 'const devices='+JSON.stringify(devices)+';\n'+funcs.map(f=>'const '+f.name+' = '+f.toString()+';').join('\n');
+ const funcs=[icon,esc,cap,boxFor,bounds,cssProps,tableLines,dropdownChoices,tableMarkup,seedRows,columnKeys,mappedFields,pickerKind,pickerFormatOptions,pickerLabel,pickerMarkup,acceptsPickerValue,pickerController,labelHTML,markup,customDoc,makeEl,runtime];
+ return 'const paths='+JSON.stringify(paths)+';\nconst devices='+JSON.stringify(devices)+';\n'+funcs.map(f=>'const '+f.name+' = '+f.toString()+';').join('\n');
 }
 function runtimeHead(p){
- return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(p.name)+'</title><style>'+nativeCSS+pickerCSS+'body{margin:0;background:#f5f4f8}main{min-height:100vh;display:grid;justify-content:center;align-content:start}.sized{position:relative}.board{position:absolute;transform-origin:top left;overflow:hidden}.exit{position:absolute;right:4px;top:4px;z-index:2;border:0;border-radius:50%;background:#f2eff6;color:#332c42;width:auto;padding:0 9px;height:28px;font-size:13px;cursor:pointer}dialog{padding:0;border:0;border-radius:13px;box-shadow:0 18px 72px #1f123655;max-width:98vw;max-height:95vh}dialog::backdrop{background:#21183366}.hit{position:absolute;background:transparent;border:0;cursor:pointer}.screenTabs{display:flex;gap:5px;padding:8px;overflow:auto;background:var(--surface,white);border-bottom:1px solid var(--line,#ddd)}.screenTabs button{white-space:nowrap;font:inherit;padding:6px 12px;border:0;background:transparent;color:var(--ink,inherit);border-radius:var(--tab-radius,5px)}.screenTabs [aria-current=page]{color:var(--accent);background:var(--table-tint,#f1edf8)}.entryNotice:not(:empty){position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#252132;color:white;border-radius:7px;padding:10px 16px;z-index:20}.object[data-type=Table]{overflow:auto}.object tr[data-empty] td{color:var(--ink,#716b78);text-align:center;padding:16px 5px}</style></head><body><div id="app"></div>';
+ return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(p.name)+'</title><style>'+nativeCSS+pickerCSS+'body{margin:0;background:#f5f4f8}main{min-height:100vh;display:grid;justify-content:center;align-content:start}.interactivePreview main{min-height:0}.sized{position:relative}.board{position:absolute;transform-origin:top left;overflow:hidden}.exit{position:absolute;right:4px;top:4px;z-index:2;border:0;border-radius:50%;background:#f2eff6;color:#332c42;width:auto;padding:0 9px;height:28px;font-size:13px;cursor:pointer}dialog{padding:0;border:0;border-radius:13px;box-shadow:0 18px 72px #1f123655;max-width:98vw;max-height:95vh}dialog::backdrop{background:#21183366}.hit{position:absolute;background:transparent;border:0;cursor:pointer}.screenTabs{display:flex;gap:5px;padding:8px;overflow:auto;background:var(--surface,white);border-bottom:1px solid var(--line,#ddd)}.screenTabs button{white-space:nowrap;font:inherit;padding:6px 12px;border:0;background:transparent;color:var(--ink,inherit);border-radius:var(--tab-radius,5px)}.screenTabs [aria-current=page]{color:var(--accent);background:var(--table-tint,#f1edf8)}.entryNotice:not(:empty){position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#252132;color:white;border-radius:7px;padding:10px 16px;z-index:20}.object[data-type=Table]{overflow:auto}.object tr[data-empty] td{color:var(--ink,#716b78);text-align:center;padding:16px 5px}</style></head><body><div id="app"></div>';
 }
 function buildHTML(p,start,device,dataState,response,interactivePreview=false){
  const safe=o=>JSON.stringify(o).replace(/</g,'\\u003c');

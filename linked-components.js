@@ -1,6 +1,6 @@
 'use strict';
 
-const sharedKeys=['name','text','labelParts','style','extraCSS','src','html','rows','choices','variant','inputType','requirement','emptyMessage','initialState','picker'];
+const sharedKeys=['name','text','labelParts','glyph','style','extraCSS','src','html','rows','choices','variant','inputType','requirement','emptyMessage','initialState','picker'];
 function sharedProperties(n){
   const data={};
   for(const key of sharedKeys)if(n[key]!==undefined)data[key]=n[key];

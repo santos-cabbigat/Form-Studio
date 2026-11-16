@@ -11,13 +11,12 @@ const options=(items,value)=>items.map(t=>{const [v,l]=Array.isArray(t)?t:[t,t];
 const field=(label,html)=>'<label class="field">'+esc(label)+html+'</label>';
 const prop=(k,v,type='text')=>'<input data-prop="'+k+'" type="'+type+'" value="'+esc(v)+'">';
 const names=triggerLabels;
-const actName=a=>(names[a.event]||'Trigger')+' → '+describeTrigger(a);
 function toast(msg){$('#toast').textContent=msg;$('#toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),2500)}
 function write(){try{const row=saveDevice(project,activeFileId,deviceRevision);deviceRevision=row.revision;storageOK=true}catch(e){storageOK=false;toast(e.name==='QuotaExceededError'?'Device storage full. Download a project copy.':e.message)}$('#saveStatus').textContent=storageOK?'Saved on this device':'Unsaved · download a copy';if(storageOK)try{queueCloud()}catch{}return storageOK}
 function remember(s=JSON.stringify(project)){past.push(s);if(past.length>24)past.shift();future=[]}
 function change(fn,msg){remember();preserveColumnLinks(project);const before=linkedBeforeEdit();fn();updateLinked(before);clean();const saved=write();render();if(msg&&saved)toast(msg)}
 function clean(){if(!project.pages.some(p=>p.id===pageId))pageId=project.pages[0].id;selected=selected.filter(id=>page().nodes.some(n=>n.id===id))}
-function history(back){const from=back?past:future,to=back?future:past;if(!from.length)return;to.push(JSON.stringify(project));project=JSON.parse(from.pop());clean();write();render()}
+function stepHistory(back){const from=back?past:future,to=back?future:past;if(!from.length)return;to.push(JSON.stringify(project));project=JSON.parse(from.pop());clean();write();render()}
 function dismiss(){ $('#overlay').replaceChildren() }
 function modal(title,body,wide=false){$('#overlay').innerHTML='<div class="dialogBg"><section class="dialog '+(wide?'wide':'')+'" role="dialog" aria-modal="true" aria-label="'+esc(title)+'"><header class="dialogHead"><h2>'+esc(title)+'</h2>'+btn('dismiss','Close','close','btn smallBtn')+'</header>'+body+'</section></div>';let first=$('.dialog input,.dialog select,.dialog textarea');if(first&&!first.readOnly&&first.tagName!=='TEXTAREA')first.focus()}
 function closeSide(){for(const s of ['.library','.inspector'])$(s).classList.remove('shown')}
@@ -57,7 +56,7 @@ function markCanvasLayer(id,on){
  const entry=canvasLayers.get(id);if(!entry)return;
  const wrap=entry.wrap;if(wrap.classList.contains('selected')===on)return;
  wrap.classList.toggle('selected',on);
- if(on){for(const dir of ['tl','tr','bl','br']){const h=document.createElement('i');h.className='handle '+dir;h.dataset.handle=dir;wrap.append(h)}}
+ if(on){for(const dir of ['tl','t','tr','r','br','b','bl','l']){const h=document.createElement('i');h.className='handle '+dir;h.dataset.handle=dir;wrap.append(h)}}
  else for(const h of wrap.querySelectorAll('.handle'))h.remove();
 }
 function drawBoard(){
@@ -96,6 +95,7 @@ function fitBoard(){
  boardViewport.classList.toggle('longScreen',long);
  const widthFit=Math.min((boardViewport.clientWidth-margin)/w,1.35);
  scale=Math.max(.1,(long?widthFit:Math.min(widthFit,viewHeight/h))*zoomFactor);
+ sheet.style.setProperty('--inverse-scale',1/scale);
  sheet.style.transform='scale('+scale+')';wrap.style.width=w*scale+'px';wrap.style.height=h*scale+'px';
  wrap.style.transform='translate(calc(-50% + '+pan[0]+'px),'+(long?'0px':'calc(-50% + '+pan[1]+'px)')+')';
  const context=pageId+'/'+device+'/'+long;
@@ -125,7 +125,7 @@ function drawLibrary(){
  '<div class="row">'+btn('pages','Manage screens','page','btn smallBtn')+btn('find-project','Find in project','search','btn smallBtn')+'</div><div id="layerCommands">'+layerCommands()+'</div><h3 class="mt">Elements</h3>'+btn('multi',multi?'Finish selecting ('+selected.length+')':'Select multiple','group','btn smallBtn')+
  [...page().nodes].reverse().map(n=>'<button data-layer="'+n.id+'" class="layer '+(selected.includes(n.id)?'active':'')+'">'+icon(categoryIcon(n.type),15)+esc(n.name)+(n.locked?' · Locked':'')+(n.hide?.[device]?' · Hidden':'')+(n.group?' '+icon('group',12):'')+'</button>').join('')+'<div class="row">'+btn('group','Group','','btn smallBtn')+btn('ungroup','Ungroup','','btn smallBtn')+'</div><div class="row">'+btn('forward','Bring forward','','btn smallBtn')+btn('back','Send back','','btn smallBtn')+'</div>'+btn('delete','Delete selection','','btn smallBtn')+'</div>'
  }else if(tab==='Triggers'){
- const n=sel();pane='<div class="panel"><h2>Triggers</h2>'+(n?'<h3>'+esc(n.name)+'</h3>'+n.actions.map((a,i)=>'<div class="row"><button class="actLine" data-editaction="'+i+'">'+icon('triggers',14)+esc(actName(a))+'</button><button title="Remove trigger" data-rmaction="'+i+'">Delete</button></div>').join('')+btn('add-action','Add trigger','plus','btn full'):'<p>Select an element to attach a trigger.</p>')+'<h3 class="mt">My trigger templates</h3>'+templateRows('',true)+btn('new-trigger','New trigger template','plus','addTemplate')+'</div>'
+ const n=sel();pane='<div class="panel"><h2>Triggers</h2>'+(n?'<h3>'+esc(n.name)+'</h3>'+triggerList(n,true):'<p>Select an element to attach a trigger.</p>')+'<h3 class="mt">My trigger templates</h3>'+templateRows('',true)+btn('new-trigger','New trigger template','plus','addTemplate')+'</div>'
  }else if(tab==='Palette'){
  pane='<div class="panel"><h2>Color palette</h2><p>Apply a swatch to the selected element’s fill.</p><div class="swatches">'+project.palette.map(c=>'<button class="swatch" data-swatch="'+esc(c)+'" style="background:'+esc(c)+'" title="Apply '+esc(c)+'"></button>').join('')+'</div>'+field('Add a custom color','<input type="color" id="newColor" value="#a28bc2">')+colorPickButton('palette','palette color')+btn('add-color','Save color','plus','btn')+'<h3 class="mt">Palette presets</h3>'+['Studio violet','Coastal green','Warm clay'].map((v,i)=>'<button class="variant" data-palette="'+i+'">'+v+icon('right',13)+'</button>').join('')+'</div>'
  }else{
@@ -150,7 +150,7 @@ function drawProps(){
  body='<div class="part"><div class="typeLine"><span class="typeIcon">'+icon(categoryIcon(n.type),17)+'</span><div><strong>'+esc(n.type)+'</strong><small>Selected element</small></div></div>'+field('Layer name',prop('name',n.name))+(['Button','Text','Input'].includes(n.type)?field(n.type==='Input'?'Placeholder':'Label',prop('text',n.text)):'')+dataInspector(n)+(n.type==='Image'?btn('replace-image','Replace image','image','btn smallBtn'):'')+'</div>';
  body+='<div class="part"><h3>Position & size</h3><div class="grid2">'+['X','Y','W','H'].map((k,i)=>'<label class="dim">'+k+'<input type="number" aria-label="'+k+'" data-box="'+i+'" value="'+b[i]+'"></label>').join('')+'</div></div>';
  body+='<div class="part"><h3>Appearance</h3>'+colorControl('Fill','fill',n.style.fill)+colorControl('Text','color',n.style.color)+'<label class="propRow">Corner radius<span class="dim" style="width:102px"><input type="number" min="0" data-style="radius" value="'+n.style.radius+'">px</span></label><label class="propRow">Font size<span class="dim" style="width:102px"><input type="number" min="1" data-style="fontSize" value="'+n.style.fontSize+'">px</span></label></div>';
- body+='<div class="part"><h3>Interactions</h3>'+(n.actions.length?n.actions.map((a,i)=>'<button class="actLine" data-editaction="'+i+'">'+icon('triggers',14)+esc(actName(a))+'</button>').join(''):btn('add-action','Add trigger','triggers','btn smallBtn'))+'</div><div class="part">'+btn('save-selected','Save as template','library','btn full')+'</div>'
+ body+='<div class="part"><h3>Interactions</h3>'+triggerList(n)+'</div><div class="part">'+btn('save-selected','Save as template','library','btn full')+'</div>'
  }
  if(mode==='design'&&n)body+=linkedPart();
  if(mode==='design')body+=notesPanel();
@@ -349,10 +349,11 @@ function command(c){
  if(c.startsWith('use-'))return useTemplate(project.templates.find(t=>t.id===c.slice(4)));
  const n=sel();
  switch(c){
+ case 'website-settings':openStudioSettings();break;
  case 'site-logout':siteLogout();break;
  case 'expand-code':{const panel=$('#inspector');if(innerWidth<=850){$('#library').classList.remove('shown');panel.classList.add('shown')}syncCodeSize(!panel.classList.contains('wideCode'));break}
  case 'merge-design':mergeDialog();break;case 'find-project':findInProject();break;case 'duplicate-layers':case 'lock-layers':case 'hide-layers':layerAction(c);break;
- case 'guides':toggleSmartGuides();break;case 'arrange':arrangeDialog();break;case 'undo':history(true);break;case 'redo':history(false);break;
+ case 'guides':toggleSmartGuides();break;case 'arrange':arrangeDialog();break;case 'undo':stepHistory(true);break;case 'redo':stepHistory(false);break;
  case 'preview':preview();break;case 'export':exportDialog();break;case 'dismiss':dismiss();break;
  case 'discard-code':dropCodeDraft();drawProps();break;case 'apply-code':applySelection();break;case 'copy-chat':copyForChat();break;case 'select-code':selectCode();break;case 'project-code':codeBrowser();break;case 'source-zip':downloadSources();break;case 'files':filesDialog();break;case 'new-file':newProject();break;case 'copy-file':newProject(true);break;case 'rename-file':$('#projectName').click();break;case 'cloud':cloudDialog();break;case 'save-selected':saveSelected();break;case 'pages':pagesDialog();break;case 'page-settings':pageSettings();break;
  case 'link-copy':placeLinked();break;case 'unlink-component':change(()=>selectedLayers().forEach(n=>delete n.sharedComponent),'Copy detached');break;case 'add-choice':editPickerChoice(-1,'add');break;case 'picker-demo':case 'linked-entry':case 'sample-entry':case 'signin':case 'blank':case 'ledger':addScreen(c);break;
@@ -380,6 +381,7 @@ document.addEventListener('click',e=>{
  if(b.dataset.insert)variantDialog(b.dataset.insert);
  if(b.dataset.layer){const n=page().nodes.find(v=>v.id===b.dataset.layer);toggleLayers(n,multi||e.shiftKey||e.ctrlKey||e.metaKey)}
  if(b.dataset.editaction!==undefined)actionDialog(+b.dataset.editaction);
+ if(b.dataset.shiftAction!==undefined&&sel())moveTrigger(sel(),+b.dataset.shiftAction,+b.dataset.direction);
  if(b.dataset.rmaction!==undefined&&sel())change(()=>sel().actions.splice(+b.dataset.rmaction,1));
  if(b.dataset.edittemplate)manageTemplate(project.templates.find(t=>t.id===b.dataset.edittemplate));
  if(b.dataset.swatch){if(sel())change(()=>sel().style.fill=b.dataset.swatch);else toast('Select an element to apply this color.')}
@@ -414,7 +416,7 @@ stage.addEventListener('pointerdown',e=>{
  if(panMode){gesture={pan:[...pan],scrollTop:boardViewport.scrollTop,x:e.clientX,y:e.clientY};return}
  const n=page().nodes.find(v=>v.id===wrap.dataset.id),handle=e.target.dataset.handle;
  if(n.locked)return;
- if(e.shiftKey||e.ctrlKey||e.metaKey||multi){toggleLayers(n,true);return}
+ if(!handle&&(e.shiftKey||e.ctrlKey||e.metaKey||multi)){toggleLayers(n,true);return}
  if(!selected.includes(n.id))selectIds(n.group?page().nodes.filter(v=>v.group===n.group).map(v=>v.id):[n.id]);
  if(selectedLayers().some(v=>v.locked))return;
  const items=page().nodes.filter(v=>selected.includes(v.id)).map(v=>({n:v,box:boxFor(v,device,project,page())}));
@@ -443,7 +445,7 @@ stage.addEventListener('dragover',e=>e.preventDefault());stage.addEventListener(
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){finishGesture(true);dismiss();closeSide();return}if(e.target.closest('textarea,input,select,[contenteditable],.dialog')||$('#overlay').children.length)return;
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();findInProject()}
  else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='d'&&selected.length){e.preventDefault();layerAction('duplicate-layers')}
- else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();history(!e.shiftKey)}
+ else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();stepHistory(!e.shiftKey)}
  else if(e.key.toLowerCase()==='a'&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&selected.length){e.preventDefault();arrangeDialog()}
  else if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();if(!selectedLayers().some(n=>n.locked))removeSelection()}
  else if(e.key==='/'){e.preventDefault();tab='Insert';render();if(innerWidth<=620)$('#library').classList.add('shown');$('#search').focus()}

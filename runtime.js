@@ -45,7 +45,7 @@ function makeEl(n,b,edit=false,rows){
 function runtime(p,mode,start,forcedDevice,response='success',interactivePreview=false){
  const root=document.getElementById('app'),surface=document.createElement('main'),modal=document.createElement('dialog');
  const close=document.createElement('button'); close.textContent='Close';close.className='exit';close.setAttribute('aria-label','Close window');
- const inner=document.createElement('div');modal.append(close,inner);root.append(surface,modal);close.onclick=closeWindow;
+ const inner=document.createElement('div');modal.append(close,inner);root.append(surface,modal);close.onclick=()=>{cancelRuns();closeWindow()};
  let current=p.pages.find(q=>q.id===start)||p.pages[0],shown=null,resize,lastWidth,lastDevice;
  if(current.kind==='window'){shown=current;current=p.pages.find(q=>q.kind==='screen')||current}
  const records=new Map(), tables=new Map(), values=new Map(),hidden=new Set();
@@ -56,10 +56,10 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
  const nav=document.createElement('nav');nav.className='screenTabs';nav.setAttribute('aria-label','Project screens');
  if(screens.length>1){root.prepend(nav);for(const pg of screens){
    const b=document.createElement('button');b.type='button';b.textContent=pg.name;b.dataset.page=pg.id;
-   b.onclick=()=>{closeWindow();current=pg;draw()};nav.append(b);
+   b.onclick=()=>{cancelRuns();closeWindow();current=pg;draw()};nav.append(b);
  }}
- const notice=document.createElement('div');notice.className='entryNotice';notice.setAttribute('role','status');root.append(notice);let timer;
- function notify(message,hold=false){clearTimeout(timer);const parent=modal.open?modal:root;if(notice.parentNode!==parent)parent.append(notice);notice.textContent=message;if(!hold)timer=setTimeout(()=>notice.textContent='',4500)}
+ const notice=document.createElement('div');notice.className='entryNotice';notice.setAttribute('role','status');root.append(notice);let timer,noticeOwner;
+ function notify(message,hold=false,owner=null){clearTimeout(timer);noticeOwner=owner;for(const anim of notice.getAnimations())anim.cancel();const parent=modal.open?modal:root;if(notice.parentNode!==parent)parent.append(notice);notice.textContent=message;if(!hold)timer=setTimeout(()=>notice.textContent='',4500)}
  const previewValues=new Map(), lastSubmit=new WeakMap();
  const nodes=new Map(p.pages.flatMap(pg=>pg.nodes.map(n=>[n.id,n])));
  const element=(id,container=root)=>container.querySelector('[data-id="'+CSS.escape(id)+'"]');
@@ -108,7 +108,6 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
    if(a.action==='developer'){
      document.dispatchEvent(new CustomEvent('formstudio:action',{detail:{name:a.key,screenId:board.dataset.pageId,layerId:activeLayerId,event:activeEvent}}));return true;
    }
-   if(a.action==='message'||a.action==='customDemo'){notify(a.message);return true}
    if(a.action==='clearFields'){
      const targets=a.fields.map(id=>[nodes.get(id),element(id,board)]);
      if(targets.some(([n,el])=>n?.type!=='Input'||!el)){notify('Reconnect the missing field before clearing.');return false}
@@ -154,29 +153,87 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
  el.addEventListener('click',()=>act(n,'click',board));el.addEventListener('keydown',e=>{if(e.key==='Enter'&&n.actions.some(a=>a.event==='enter')){e.preventDefault();act(n,'enter',board)}})}
  });
  }
- function act(n,event,board){
- for(const a of n.actions.filter(a=>a.event===event)){
- if(['saveRow','saveValue','copyValue','passwordDemo'].includes(a.action)&&response!=='success'){
-   const feedback={saving:'Saving…',failed:'Save failed. Try again.',offline:'Offline. Your entry is still here.'};
-   notify(a.feedback?.[response]||feedback[response],response==='saving');return;
+ // Keep timed actions tied to their interaction. Manual navigation or dismissal
+ // cancels the old flow. Navigation performed by a step continues its own flow.
+ const runs=new Map();
+ function cancelRuns(except){
+   for(const run of runs.values())if(run!==except)run.abort();
  }
- if(!applyDataAction(a,board,n.id,event))return;
- const page=p.pages.find(q=>q.id===a.target);
- if(a.action==='open'&&page?.kind==='window'){shown=page;show()}
- if(a.action==='close')closeWindow();
- if(a.action==='go'&&page?.kind==='screen'){closeWindow();current=page;draw()}
- if(['expand','collapse','toggle'].includes(a.action)){
-   const target=nodes.get(a.target),targetEl=element(a.target,board);
-   if(!target||!targetEl){notify('Reconnect the layer for this trigger.');return}
-   const hide=a.action==='collapse'||(a.action==='toggle'&&!hidden.has(a.target));
-   for(const el of board.querySelectorAll('[data-id],[data-hit-for]')){
-     const id=el.dataset.id||el.dataset.hitFor;
-     if(id!==target.id&&(!target.group||nodes.get(id)?.group!==target.group))continue;
-     if(hide)hidden.add(id);else hidden.delete(id);
-     el.style.visibility=hide?'hidden':'visible';
+ function waitFor(ms,signal){
+   return new Promise(resolve=>{
+     const id=setTimeout(finish,ms);
+     function finish(){clearTimeout(id);signal.removeEventListener('abort',finish);resolve()}
+     signal.addEventListener('abort',finish,{once:true});
+   });
+ }
+ async function fadeOut(el,ms,signal){
+   if(!ms||matchMedia('(prefers-reduced-motion: reduce)').matches||!el.animate)return true;
+   const animation=el.animate([{opacity:1},{opacity:0}],{duration:ms,easing:'ease-in',fill:'forwards'});
+   const cancel=()=>animation.cancel();
+   signal.addEventListener('abort',cancel,{once:true});
+   try{await animation.finished;return !signal.aborted}
+   catch{return false}
+   finally{signal.removeEventListener('abort',cancel);animation.cancel()}
+ }
+ async function act(n,event,board){
+   const actions=n.actions.filter(a=>a.event===event);
+   if(!actions.length)return;
+   const key=n.id+'/'+event,run=new AbortController(),signal=run.signal;
+   runs.get(key)?.abort();runs.set(key,run);
+   const origin=board.dataset.pageId;
+   try{
+     for(const [index,a] of actions.entries()){
+       if(signal.aborted)return;
+       if(a.delayMs){await waitFor(a.delayMs,signal);if(signal.aborted)return}
+       // A responsive repaint can replace the originating board during a wait.
+       if(!board.isConnected)board=root.querySelector('.board[data-page-id="'+CSS.escape(origin)+'"]')||board;
+       if(['saveRow','saveValue','copyValue','passwordDemo'].includes(a.action)&&response!=='success'){
+         const feedback={saving:'Saving…',failed:'Save failed. Try again.',offline:'Offline. Your entry is still here.'};
+         notify(a.feedback?.[response]||feedback[response],response==='saving');return;
+       }
+       if(!applyDataAction(a,board,n.id,event))return;
+       const page=p.pages.find(q=>q.id===a.target);
+       switch(a.action){
+         case 'message':case 'customDemo':{
+           const hold=actions.slice(index+1).some(next=>next.action==='fadeMessage');
+           notify(a.message,hold,hold?run:null);break;
+         }
+         case 'fadeMessage':
+           if(notice.textContent){
+             if(!await fadeOut(notice,a.durationMs??350,signal)||signal.aborted)return;
+             notify('');
+           }
+           break;
+         case 'fadeClose':
+           if(!modal.open){notify('Open a window before fading it out.');return}
+           cancelRuns(run);
+           if(!await fadeOut(modal,a.durationMs??350,signal)||signal.aborted)return;
+           closeWindow();break;
+         case 'open':
+           if(page?.kind!=='window'){notify('Choose a window for this trigger.');return}
+           cancelRuns(run);shown=page;show();break;
+         case 'close':cancelRuns(run);closeWindow();break;
+         case 'go':
+           if(page?.kind!=='screen'){notify('Choose a screen for this trigger.');return}
+           cancelRuns(run);closeWindow();current=page;draw();break;
+         case 'expand':case 'collapse':case 'toggle':{
+           const target=nodes.get(a.target),targetEl=element(a.target,board);
+           if(!target||!targetEl){notify('Reconnect the layer for this trigger.');return}
+           const hide=a.action==='collapse'||(a.action==='toggle'&&!hidden.has(a.target));
+           for(const el of board.querySelectorAll('[data-id],[data-hit-for]')){
+             const id=el.dataset.id||el.dataset.hitFor;
+             if(id!==target.id&&(!target.group||nodes.get(id)?.group!==target.group))continue;
+             if(hide)hidden.add(id);else hidden.delete(id);
+             el.style.visibility=hide?'hidden':'visible';
+           }
+           break;
+         }
+       }
+     }
+   }finally{
+     if(runs.get(key)===run)runs.delete(key);
+     if(noticeOwner===run)notify('');
    }
- }
- }
  }
  function reportLocation(){
    if(interactivePreview&&parent!==window)parent.postMessage({type:'form-studio-location',page:(shown||current).id},'*');
@@ -189,7 +246,7 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
   }
   paint(current,surface,document.documentElement.clientWidth);if(shown)show();else reportLocation()}
  modal.addEventListener('close',()=>{if(!modal.open){shown=null;reportLocation()}});
- modal.addEventListener('cancel',()=>{shown=null;pickers.close();reportLocation()});
+ modal.addEventListener('cancel',()=>{cancelRuns();shown=null;pickers.close();reportLocation()});
  function fitExisting(container,available){
    const outer=container.firstElementChild,board=outer?.firstElementChild;
    if(!board)return;
@@ -208,7 +265,7 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
    if(!Object.hasOwn(devices,config.device)||!['design','sample','empty'].includes(config.dataState)||!['success','saving','failed','offline'].includes(config.response))return;
    const newLayout=config.device!==forcedDevice;
    forcedDevice=config.device;
-   if(response!==config.response){response=config.response;clearTimeout(timer);notice.textContent=''}
+   if(response!==config.response){cancelRuns();response=config.response;clearTimeout(timer);notice.textContent=''}
    if(mode!==config.dataState){
      mode=config.dataState;
      for(const [id,table] of tables){

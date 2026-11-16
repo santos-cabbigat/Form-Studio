@@ -74,3 +74,53 @@ main.inspectorClosed .workspace{grid-column:2/-1}
 .eyeToggle .eyeSlash{display:none}
 .eyeToggle[aria-pressed="true"] .eyeSlash{display:inline}
 #ownerEntrance .eyeToggle:focus-visible{outline:2px solid #7049a6;outline-offset:-3px}
+
+/* The glyph stays small at every canvas zoom. Its transparent hit area is larger. */
+.nodeWrap.selected>.handle{
+ --hit-size:16px;
+ width:min(46%,calc(var(--hit-size) * var(--inverse-scale,1)));height:min(46%,calc(var(--hit-size) * var(--inverse-scale,1)));border:0;background:transparent;
+ right:auto;bottom:auto;transform:translate(-50%,-50%);touch-action:none;
+}
+.handle::after{content:"";position:absolute;inset:50% auto auto 50%;width:4px;height:4px;box-sizing:border-box;transform:translate(-50%,-50%) scale(var(--inverse-scale,1));border:1px solid #7943cf;background:white}
+.handle.tl,.handle.l,.handle.bl{left:0}.handle.t,.handle.b{left:50%}.handle.tr,.handle.r,.handle.br{left:100%}
+.handle.tl,.handle.t,.handle.tr{top:0}.handle.l,.handle.r{top:50%}.handle.bl,.handle.b,.handle.br{top:100%}
+.handle.l,.handle.r{cursor:ew-resize}.handle.t,.handle.b{cursor:ns-resize}
+@media(pointer:coarse){.nodeWrap.selected>.handle{--hit-size:24px}}
+
+:root{--studio-header:66px;--studio-tools:58px;--studio-content-top:calc(var(--studio-header) + var(--studio-tools))}
+.studioToolbar{height:var(--studio-tools);display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--line);background:#fff}
+.studioToolbar .tabs{flex:1;min-width:0;height:100%;padding:0;border:0;overflow-x:auto;scrollbar-width:thin;justify-content:flex-start}
+.studioToolbar .tabs button{flex-shrink:0}
+.studioToolbar .fileBar{display:grid;grid-template-columns:auto auto;gap:2px 5px;min-height:0;height:auto;border:0;border-left:1px solid var(--line);padding:0 0 0 12px;overflow:visible}
+.studioToolbar .fileBar .btn{height:24px;min-width:0;margin:0;padding:1px 8px;font-size:11px;font-weight:550;line-height:1.1;border:0;background:#f5f3f8;border-radius:4px;text-decoration:none}
+.studioToolbar .fileBar .btn:hover,.studioToolbar .fileBar [aria-pressed=true]{background:var(--pale);color:var(--purple)}
+body>main{height:calc(100dvh - var(--studio-content-top))}
+main .inspector.floatingInspector,main .inspector.wideCode,main .inspector.floatingInspector.shown{top:var(--studio-content-top)}
+@media(max-width:850px){main .inspector.shown,main .library.shown{top:var(--studio-content-top)}}
+@media(max-width:620px){
+ :root{--studio-header:55px}
+ .studioToolbar{gap:5px;padding:0 5px}
+ .studioToolbar .tabs{gap:1px;justify-content:space-around}
+ .studioToolbar .tabs button{height:44px;flex-direction:column;justify-content:center;font-size:10px;padding:0 2px;gap:4px}
+ .studioToolbar .fileBar{gap:2px;padding-left:4px}
+ .studioToolbar .fileBar .btn{padding:1px 3px;font-size:10px}
+}
+.triggerSequence{margin:8px 0 12px}
+.triggerSequence h4{margin:12px 0 4px;font-size:11px;color:var(--muted)}
+.triggerStep{display:flex;align-items:center;gap:2px;margin:4px 0}
+.triggerStep .actLine{flex:1;min-width:0;overflow-wrap:anywhere;line-height:1.35}
+.triggerStep .stepNumber{font-weight:700;font-variant-numeric:tabular-nums}
+.triggerStep .stepMove{width:24px;min-height:30px;padding:2px;color:var(--purple);font-size:14px}
+
+#studioSettings{box-sizing:border-box;width:min(520px,calc(100vw - 24px));max-height:88dvh;padding:0;overflow:auto;color:var(--ink);border:1px solid var(--line);border-radius:16px;background:#faf9fc;box-shadow:0 20px 70px #21133238}
+#studioSettings::backdrop{background:#221b3452;backdrop-filter:blur(3px)}
+.settingsHeader{position:sticky;top:0;z-index:1;display:flex;justify-content:space-between;align-items:center;padding:15px 20px;background:#fff;border-bottom:1px solid var(--line)}
+.settingsHeader span{font-size:11px;color:var(--muted)}.settingsHeader h2{margin:2px 0 0;font-size:22px;letter-spacing:-.7px}
+.settingsBody{padding:0 18px 16px}.settingsBody section{background:#fff;border:1px solid var(--line);border-radius:10px;padding:0 12px;margin-top:12px}
+.settingsBody h3{margin:0;padding:10px 0 5px;color:#625271;font-size:12px}.settingRow{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:46px;padding:9px 0}
+.settingRow+.settingRow{border-top:1px solid #eeedf1}.settingRow strong{font-size:13px;font-weight:600}
+.settingRow small,.settingRow p{display:block;margin:3px 0 0;font-size:12px;line-height:1.4;color:var(--muted);overflow-wrap:anywhere}
+.settingRow>.btn{flex:none;padding:4px 8px;font-size:12px}.settingsBody [role=status]{font-size:12px;line-height:1.45;color:var(--muted)}.settingsBody [role=status]:empty{display:none}
+.settingRow input[role=switch]{appearance:none;position:relative;flex:none;width:34px;height:20px;border-radius:12px;background:#b6b2bf;cursor:pointer}
+.settingRow input[role=switch]::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;background:#fff;border-radius:50%}
+.settingRow input[role=switch]:checked{background:var(--purple)}.settingRow input[role=switch]:checked::after{left:17px}

@@ -1,9 +1,12 @@
 'use strict';
 
-const triggerLabels={click:'Click / tap',enter:'Press Enter',change:'Value changed',open:'Open window',close:'Close window',go:'Go to screen',expand:'Show / expand',collapse:'Hide / collapse',toggle:'Toggle visibility',saveRow:'Save to sample table',saveValue:'Save a preview value',copyValue:'Set another field',passwordDemo:'Simulate password update',clearFields:'Clear chosen fields',message:'Show a message',loadValue:'Read a preview value',pickerAction:'Control a picker',developer:'Developer action',customDemo:'Custom action (simulation)'};
+const triggerLabels={click:'Click / tap',enter:'Press Enter',change:'Value changed',open:'Open window',close:'Close window',fadeClose:'Fade out and close window',fadeMessage:'Fade out message',go:'Go to screen',expand:'Show / expand',collapse:'Hide / collapse',toggle:'Toggle visibility',saveRow:'Save to sample table',saveValue:'Save a preview value',copyValue:'Set another field',passwordDemo:'Simulate password update',clearFields:'Clear chosen fields',message:'Show a message',loadValue:'Read a preview value',pickerAction:'Control a picker',developer:'Developer action',customDemo:'Custom action (simulation)'};
 const saveTypes=['saveRow','saveValue','copyValue','passwordDemo'];
 function triggerOK(a){
   if(!a||!['click','enter','change'].includes(a.event)||!Object.hasOwn(triggerLabels,a.action)||['click','enter','change'].includes(a.action))return false;
+  const validTime=ms=>Number.isSafeInteger(ms)&&ms>=0&&ms<=2147483647;
+  if(a.delayMs!==undefined&&!validTime(a.delayMs))return false;
+  if(a.durationMs!==undefined&&!validTime(a.durationMs))return false;
   const id=s=>typeof s==='string'&&/^[a-z][a-z0-9_-]*$/i.test(s);
   const string=s=>typeof s==='string'&&s.trim().length>0;
   if(a.action==='developer')return string(a.key)&&/^[a-z][a-z0-9_.-]{0,79}$/i.test(a.key);
@@ -14,7 +17,7 @@ function triggerOK(a){
   if(a.action==='pickerAction')return id(a.target)&&['open','today','next','previous','clear'].includes(a.operation);
   if(a.action==='passwordDemo')return id(a.target)&&typeof a.message==='string';
   if(a.action==='message'||a.action==='customDemo')return string(a.message);
-  return a.action==='close'||id(a.target);
+  return ['close','fadeClose','fadeMessage'].includes(a.action)||id(a.target);
 }
 function columnKeys(table){
   const counts=new Map();
@@ -51,7 +54,9 @@ function targetChoices(action) {
   if(action==='saveValue')return inputsOnPage().map(n=>[n.id,n.name]);
   return page().nodes.map(n=>[n.id,n.name]);
 }
+function isFade(action){return action==='fadeClose'||action==='fadeMessage'}
 function describeTrigger(a){
+  if(isFade(a.action))return triggerLabels[a.action]+' · '+(a.durationMs??350)/1000+' s';
   const target=targetChoices(a.action).find(([id])=>id===a.target)?.[1]||'Choose a target';
   if(a.action==='developer')return 'Developer action · '+a.key;
   if(a.action==='clearFields')return 'Clear '+a.fields.map(id=>page().nodes.find(n=>n.id===id)?.name||'missing field').join(', ');
@@ -61,15 +66,49 @@ function describeTrigger(a){
   if(a.action==='pickerAction'){const n=page().nodes.find(n=>n.id===a.target);return (pickerOperations(n).find(o=>o[0]===a.operation)?.[1]||'Control picker')+' · '+target}
   return triggerLabels[a.action]+(a.action==='close'?'':' · '+target);
 }
+function triggerList(n,showDelete=false){
+  const groups=new Map();
+  n.actions.forEach((action,index)=>{
+    if(!groups.has(action.event))groups.set(action.event,[]);
+    groups.get(action.event).push(index);
+  });
+  let list='';
+  for(const [event,indices] of groups){
+    list+='<h4>'+esc(triggerLabels[event])+'</h4>';
+    indices.forEach((index,position)=>{
+      const action=n.actions[index];
+      const move=(dir,enabled)=>{
+        const word=dir<0?'earlier':'later';
+        return '<button type="button" class="stepMove" data-shift-action="'+index+'" data-direction="'+dir+'" aria-label="Move step '+(position+1)+' '+word+'" title="Move '+word+'" '+(enabled?'':'disabled')+'>'+(dir<0?'↑':'↓')+'</button>';
+      };
+      const timing=action.delayMs?'Wait '+action.delayMs/1000+' s → ':'';
+      list+='<div class="triggerStep"><button type="button" class="actLine" data-editaction="'+index+'"><span class="stepNumber">'+(position+1)+'</span><span>'+esc(timing+describeTrigger(action))+'</span></button>'+
+        (indices.length>1?move(-1,position>0)+move(1,position<indices.length-1):'')+
+        (showDelete?'<button class="stepMove" type="button" data-rmaction="'+index+'" title="Delete trigger" aria-label="Delete step '+(position+1)+'">×</button>':'')+'</div>';
+    });
+  }
+  return (list?'<div class="triggerSequence">'+list+'</div>':'')+btn('add-action','Add trigger','plus','btn full');
+}
+function moveTrigger(n,index,direction){
+  const action=n.actions[index];
+  if(!action||![-1,1].includes(direction))return;
+  for(let other=index+direction;other>=0&&other<n.actions.length;other+=direction){
+    if(n.actions[other].event!==action.event)continue;
+    change(()=>{[n.actions[index],n.actions[other]]=[n.actions[other],action]});
+    return;
+  }
+}
 function triggerSelect(id,title,choices,value,placeholder='Choose…'){
   return field(title,'<select id="'+id+'">'+options([['',placeholder],...choices],value||'')+'</select>');
 }
 function triggerForm(old={}){
   const events=[['click',triggerLabels.click],['enter',triggerLabels.enter]];
   if(sel()?.type==='Input'||old.event==='change')events.push(['change',triggerLabels.change]);
-  const menu=[['save','Save…'],['clearFields','Clear…'],['pickerAction','Control a picker…'],['message','Show a message'],['loadValue','Read a preview value'],['customDemo','Custom action (simulation)'],['developer','Developer action…'],...['open','close','go','expand','collapse','toggle'].map(k=>[k,triggerLabels[k]])];
+  const menu=[['save','Save…'],['clearFields','Clear…'],['pickerAction','Control a picker…'],['message','Show a message'],['loadValue','Read a preview value'],['customDemo','Custom action (simulation)'],['developer','Developer action…'],...['open','close','fadeClose','fadeMessage','go','expand','collapse','toggle'].map(k=>[k,triggerLabels[k]])];
   return field('When','<select id="ev">'+options(events,old.event||'click')+'</select>')+
-    triggerSelect('ac','What should happen?',menu,saveTypes.includes(old.action)?'save':old.action,'Choose an action')+'<div id="targetArea"></div>';
+    triggerSelect('ac','What should happen?',menu,saveTypes.includes(old.action)?'save':old.action,'Choose an action')+'<div id="targetArea"></div>'+
+    field('Wait before this action (seconds)','<input id="triggerDelay" type="number" min="0" step="0.001" value="'+esc((old.delayMs||0)/1000)+'">')+
+    '<p class="hint">Actions for the same event run from top to bottom. A wait starts after the previous action finishes.</p>';
 }
 function wireTargets(old={}){
   const area=$('#targetArea'),ac=$('#ac');
@@ -81,6 +120,10 @@ function wireTargets(old={}){
     const key=()=>field('Name of preview value','<input id="previewKey" placeholder="e.g. Preferred account" value="'+esc(current.key||'')+'">');
     const hint=text=>'<p class="hint">'+esc(text)+'</p>';
     if(!action||action==='close'){el.innerHTML='';return}
+    if(isFade(action)){
+      el.innerHTML=field('Fade duration (seconds)','<input id="fadeDuration" type="number" min="0" step="0.001" value="'+esc((current.durationMs??350)/1000)+'">');
+      return;
+    }
     if(action==='developer'){el.innerHTML=field('Action name','<input id="developerKey" maxlength="80" placeholder="e.g. calculate-total" value="'+esc(current.key||'')+'">')+hint('This event is ready for custom logic in the exported source ZIP.');return}
     if(action==='message'||action==='customDemo'){el.innerHTML=msg(action==='message'?'Message to show':'Describe the simulated result',action==='message'?'Saved.':'')+(action==='customDemo'?hint('Preview shows this result when the trigger runs.'):'');return}
     if(action==='clearFields'){
@@ -112,7 +155,15 @@ function readTrigger(){
   const val=id=>$(id)?.value?.trim()||'';
   const event=val('#ev'),action=val('#ac')==='save'?val('#saveKind'):val('#ac'),target=val('#target');
   if(!action)throw Error(val('#ac')==='save'?'Choose where this Save should go.':'Choose what should happen.');
+  function milliseconds(selector){
+    const input=$(selector),ms=Math.round(input.valueAsNumber*1000);
+    if(!input.checkValidity()||!Number.isSafeInteger(ms)||ms<0||ms>2147483647)throw Error('Enter a valid time in seconds, using up to three decimal places.');
+    return ms;
+  }
   let a={event,action,target};
+  const delayMs=milliseconds('#triggerDelay');
+  if(delayMs)a.delayMs=delayMs;
+  if(isFade(action))a.durationMs=milliseconds('#fadeDuration');
   if(action==='saveRow'){if(!target)throw Error('Choose the destination table.');a=readSaveRow(a)}
   if(action==='clearFields')a.fields=$$('[data-clear-field]:checked').map(e=>e.dataset.clearField);
   if(action==='saveValue'||action==='loadValue')a.key=val('#previewKey');

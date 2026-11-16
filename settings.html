@@ -1,19 +1,5 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#f8f8fa"><title>Website settings · Oon Jai Form Studio</title><link rel="stylesheet" href="studio.css?v=eye1"></head><body class="locked"><section id="ownerEntrance"><form>
-  <h1>Oon Jai Form Studio</h1>
-  <label id="ownerEmailLabel">Owner email<input type="email" name="email" autocomplete="username" required></label>
-  <label id="accessCodeLabel" hidden>Private recovery code<input name="code" autocomplete="off" spellcheck="false" autocapitalize="none"></label>
-  <label id="pwdLabel" for="studio-password">Studio password</label><div class="passwordField"><input id="studio-password" type="password" name="password" autocomplete="current-password" required><button type="button" class="eyeToggle" data-eye="password" aria-controls="studio-password" aria-label="Show password" aria-pressed="false"><svg aria-hidden="true" viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.7-7 10-7 10 7 10 7-3.7 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="eyeSlash" d="m3 3 18 18"/></svg></button></div>
-  <small id="authHint" hidden>Use at least 8 characters.</small>
-  <div id="repeatLabel" hidden><label for="studio-confirm">Confirm new password</label><div class="passwordField"><input id="studio-confirm" type="password" name="confirm" autocomplete="new-password"><button type="button" class="eyeToggle" data-eye="confirm" aria-controls="studio-confirm" aria-label="Show password" aria-pressed="false"><svg aria-hidden="true" viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.7-7 10-7 10 7 10 7-3.7 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="eyeSlash" d="m3 3 18 18"/></svg></button></div></div>
-  <button class="btn primary" type="submit">Sign in</button>
-  <p role="status" aria-live="polite"></p>
-  <div id="accessModes" hidden><button type="button" data-auth="setup" hidden>Set up Studio password</button><button type="button" data-auth="recover" hidden>Recover Studio password</button></div>
-  <button type="button" data-auth="login" hidden>Back to sign in</button>
-<section id="recoveryReceipt" hidden><b>Save your Studio recovery code</b><p>Keep this private code in your password manager. It lets you set a new Studio password.</p><output></output><button class="btn primary" type="button" id="finishAccess">I saved it · Continue</button></section></form></section>
-<div class="settingsPage"><header><a href="account.html">← Form Studio</a><span>Oon Jai</span></header><h1>Website settings</h1>
-<section><h2>My account</h2><p id="identity"></p><button id="signOutAccount">Sign out</button></section>
-<section><h2>Sign-in preferences</h2><p>These preferences apply to this browser.</p><label><input type="checkbox" id="rememberEmail"> Remember my email on the sign-in page</label><label><input type="checkbox" id="allowOffline"> Allow password unlock on this device while offline</label><p id="offlineHint" role="status"></p></section>
-<section><h2>Device storage &amp; offline access</h2><p>Projects saved in this browser: <b id="stored"></b></p><p id="install"></p></section>
-<section><h2>Cloud connection</h2><p>Network: <b id="network"></b></p><button id="checkCloud">Check account connection</button><p id="cloudResult" role="status"></p></section>
-<section><h2>About &amp; updates</h2><p>Oon Jai Form Studio · Website settings release 4</p><button id="checkUpdate">Check for updates</button><p id="updateResult" role="status"></p></section></div>
-<script src="cloud.js?v=studioaccess2"></script><script type="text/plain" data-editor-src="website-settings.js?v=studioaccess2"></script><script src="owner-login.js?v=private-setup1"></script></body></html>
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Settings · Form Studio</title>
+<script>location.replace('./index.html'+location.search+(location.hash||'#settings'))</script>
+</head><body><a href="./index.html#settings">Open Form Studio settings</a></body></html>

@@ -25,7 +25,7 @@ function handoffText(p,start){
       text.push('','### '+n.name+' ['+n.id+']','Component file: '+sourcePath(dir,n));
       if(n.devNote)text.push('Developer note: '+n.devNote);
       for(const a of n.actions){
-        const details=[a.key,a.source?'from '+ref(a.source):'',a.target?'to '+ref(a.target):'',a.fields?.length?'fields '+a.fields.map(id=>id?ref(id):'(empty)').join(', '):'',a.operation,a.message].filter(Boolean);
+        const details=[a.delayMs?'wait '+a.delayMs/1000+' s':'',a.durationMs!==undefined?'fade '+a.durationMs/1000+' s':'',a.key,a.source?'from '+ref(a.source):'',a.target?'to '+ref(a.target):'',a.fields?.length?'fields '+a.fields.map(id=>id?ref(id):'(empty)').join(', '):'',a.operation,a.message].filter(Boolean);
         text.push('- '+a.event+' → '+a.action+(details.length?' · '+details.join(' · '):''));
       }
     }

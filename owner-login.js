@@ -84,6 +84,7 @@
        tag.dataset.loaded='yes';
      }
      document.body.classList.remove('locked');screen.remove();
+     if(location.hash==='#settings')openStudioSettings();
    }finally{loading=false}
  }
  function busy(value){submit.disabled=value;for(const b of modeButtons)b.disabled=value}

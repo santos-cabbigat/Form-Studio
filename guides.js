@@ -67,18 +67,22 @@ function matchGuide(axis, rect, handle, targets, tolerance) {
 
 function guidedBounds(before, dx, dy, handle, targets, tolerance) {
   let [l,t,r,b]=before;
-  const left=handle?.endsWith('l'), top=handle?.startsWith('t');
+  const left=handle?.includes('l'), right=handle?.includes('r');
+  const top=handle?.includes('t'), bottom=handle?.includes('b');
   if(handle) {
-    if(left) l=Math.min(r-12,l+dx); else r=Math.max(l+12,r+dx);
-    if(top) t=Math.min(b-12,t+dy); else b=Math.max(t+12,b+dy);
+    if(left) l=Math.min(r-12,l+dx); else if(right) r=Math.max(l+12,r+dx);
+    if(top) t=Math.min(b-12,t+dy); else if(bottom) b=Math.max(t+12,b+dy);
   } else {l+=dx;r+=dx;t+=dy;b+=dy;}
   const raw=[l,t,r-l,b-t];
-  const matches=[0,1].map(axis=>matchGuide(axis,raw,handle,targets,tolerance));
+  const matches=[0,1].map(axis=>{
+    const active=axis===0?(left||right):(top||bottom);
+    return !handle||active?matchGuide(axis,raw,handle,targets,tolerance):null;
+  });
   const x=matches[0]?.delta||0,y=matches[1]?.delta||0;
   if(!handle||left) l+=x;
-  if(!handle||!left) r+=x;
+  if(!handle||right) r+=x;
   if(!handle||top) t+=y;
-  if(!handle||!top) b+=y;
+  if(!handle||bottom) b+=y;
   return {edges:[l,t,r,b].map(Math.round),matches};
 }
 
@@ -103,7 +107,7 @@ function drawGuides(rect, matches, handle, targets) {
       line(axis===0,m.line, Math.min(rect[other],m.target.box[other])-6/zoom,
         Math.max(rect[other]+rect[other+2],m.target.box[other]+m.target.box[other+2])+6/zoom);
     }
-    if(!handle) continue;
+    if(!handle||!(axis===0?/[lr]/:/[tb]/).test(handle)) continue;
     const size=rect[axis+2];
     // An aligned edge and an equal dimension can both match on the same axis.
     let same=m?.equalSize?m.target:null;

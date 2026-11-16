@@ -61,6 +61,7 @@ function mergeDesign(destination,source){
   const used=new Set(),layoutIDs=new Map(),groupIDs=new Map(),sharedIDs=new Map();
   const collect=n=>[n.id,n.group,n.sharedComponent,n.picker?.footerButton,...n.actions.flatMap(a=>[a.target,a.source,...(a.fields||[])])].filter(Boolean).forEach(id=>used.add(id));
   for(const p of [destination,incoming]){
+    for(const c of p.categories||[])used.add(c.id);
     for(const pg of p.pages){used.add(pg.id);pg.nodes.forEach(collect)}
     for(const t of p.templates){used.add(t.id);if(t.node)collect(t.node);if(t.layout){used.add(t.layout.id);t.layout.nodes.forEach(collect)}}
   }
@@ -80,11 +81,13 @@ function mergeDesign(destination,source){
     n.actions.forEach(action);
   }
   function pageLayout(pg){pg.id=link(pg.id);pg.nodes.forEach(layer)}
-  incoming.pages.forEach(pageLayout);
+  for(const c of incoming.categories||[]){c.id=link(c.id);if(c.parentId)c.parentId=link(c.parentId)}
+  for(const pg of incoming.pages){if(pg.parentId)pg.parentId=link(pg.parentId);pageLayout(pg)}
   for(const t of incoming.templates){
     t.id=fresh();if(t.layout)pageLayout(t.layout);
     if(t.node)layer(t.node);if(t.action)action(t.action);
   }
+  if(incoming.categories?.length)(destination.categories??=[]).push(...incoming.categories);
   destination.pages.push(...incoming.pages);destination.templates.push(...incoming.templates);
   for(const color of incoming.palette)if(!destination.palette.includes(color))destination.palette.push(color);
   return incoming.pages.find(pg=>pg.kind==='screen').id;

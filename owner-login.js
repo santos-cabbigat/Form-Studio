@@ -1,4 +1,11 @@
 'use strict';
+// Keep the worker that supplied this tab. Another tab can activate an update
+// while this editor still has the previous release loaded in memory.
+let studioDocumentWorker=navigator.serviceWorker?.controller;
+navigator.serviceWorker?.addEventListener('controllerchange',()=>{
+ studioDocumentWorker??=navigator.serviceWorker.controller;
+});
+
 (async function ownerEntrance(){
  const owner='cabbigatsantos07@gmail.com';
  const screen=document.getElementById('ownerEntrance'),form=screen.querySelector('form'),fields=form.elements;

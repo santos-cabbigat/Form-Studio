@@ -1,5 +1,97 @@
 'use strict';
 
+function activateStudioUpdate(worker){
+ const sw=navigator.serviceWorker;
+ return new Promise((resolve,reject)=>{
+   const listeners=new AbortController();
+   const timer=setTimeout(()=>finish(Error('The update is taking longer than expected. Try again.')),20000);
+   function finish(error){
+     clearTimeout(timer);listeners.abort();
+     if(error)reject(error);else resolve();
+   }
+   function inspect(){
+     if(sw.controller===worker)finish();
+     else if(worker.state==='redundant')finish(Error('A newer update is available. Check again.'));
+   }
+   sw.addEventListener('controllerchange',inspect,{signal:listeners.signal});
+   worker.addEventListener('statechange',inspect,{signal:listeners.signal});
+   try{worker.postMessage({type:'form-studio:apply-update'});inspect()}
+   catch{finish(Error('Could not apply the update. Try again.'))}
+ });
+}
+
+function bindStudioUpdates(dialog){
+ const button=dialog.querySelector('#checkUpdate'),status=dialog.querySelector('#updateResult');
+ const sw=navigator.serviceWorker;
+ if(!sw){button.disabled=true;status.textContent='This browser does not support editor updates.';return}
+ const lifetime=new AbortController(),listeners={signal:lifetime.signal};
+ const scope=new URL('./',location.href).href;
+ let registration,installing,checking=false,applying=false,checked=false,error='';
+ const changed=()=>Boolean(studioDocumentWorker&&sw.controller&&sw.controller!==studioDocumentWorker);
+ function render(){
+   const available=Boolean(registration?.waiting||changed());
+   const downloading=Boolean(registration?.installing);
+   button.classList.toggle('primary',available);
+   button.disabled=applying||(!available&&(checking||downloading||!navigator.onLine));
+   button.textContent=applying?'Updating…':available?'Update now':downloading?'Downloading…':checking?'Checking…':'Check for updates';
+   status.textContent=error||(applying?'Applying the update…':available?'A new version is ready.':
+     downloading?(registration.active?'Downloading the new version…':'Preparing offline access…'):
+     !navigator.onLine?'Connect to check for updates.':checking?'Checking for a new version…':checked?'Form Studio is up to date.':'');
+ }
+ function watchInstall(){
+   const worker=registration?.installing;
+   if(worker&&worker!==installing){
+     installing=worker;error='';
+     worker.addEventListener('statechange',()=>{
+       if(worker===installing&&worker.state==='redundant'&&!registration.waiting&&!changed()){
+         error='The download did not finish. Check for updates to try again.';
+       }
+       render();
+     },listeners);
+   }
+   render();
+ }
+ function watch(reg){
+   if(reg?.scope!==scope||lifetime.signal.aborted)return;
+   if(registration!==reg){
+     registration=reg;reg.addEventListener('updatefound',watchInstall,listeners);
+   }
+   watchInstall();
+ }
+ function savedForUpdate(){
+   if(dirtyDrafts.size)saveCodeDrafts();
+   if(storageOK&&!dirtyDrafts.size)return true;
+   error='Save your project or code draft before updating.';render();return false;
+ }
+ sw.addEventListener('controllerchange',render,listeners);
+ for(const event of ['online','offline'])window.addEventListener(event,render,listeners);
+ dialog.addEventListener('close',()=>lifetime.abort(),{once:true});
+ button.onclick=async()=>{
+   error='';
+   const waiting=registration?.waiting;
+   if(waiting||changed()){
+     if(!savedForUpdate())return;
+     applying=true;render();
+     try{
+       if(waiting)await activateStudioUpdate(waiting);
+       if(savedForUpdate())location.reload();
+     }catch(err){error=err.message}
+     finally{applying=false;render()}
+     return;
+   }
+   checking=true;render();
+   try{
+     const reg=await sw.register(new URL('sw.js',scope),{scope,updateViaCache:'none'});
+     watch(reg);
+     if(!reg.installing&&!reg.waiting)await reg.update();
+     checked=true;
+   }catch{error='Could not check for updates. Check your connection and try again.'}
+   finally{checking=false;watchInstall()}
+ };
+ render();
+ sw.getRegistration(scope).then(watch).catch(()=>{});
+}
+
 function openStudioSettings(){
  if(document.getElementById('studioSettings'))return;
  const dialog=document.createElement('dialog');
@@ -55,14 +147,7 @@ function openStudioSettings(){
    const reg=await navigator.serviceWorker.getRegistration(new URL('./',location.href));
    el('install').textContent=reg?.active?'Offline editor installed.':'Offline editor installation is pending.';
  }
- el('checkUpdate').onclick=async e=>{
-   const button=e.currentTarget;button.disabled=true;
-   try{if(!navigator.onLine)throw Error('Connect to the internet to check for updates.');
-    const reg=await navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'});await reg.update();
-    el('updateResult').textContent=reg.installing||reg.waiting?'Update found. Reopen Form Studio after installation.':'Update check completed.';
-    await inspectInstall();
-   }catch(err){el('updateResult').textContent=err.message}finally{button.disabled=false}
- };
+ bindStudioUpdates(dialog);
  dialog.showModal();
  inspectInstall().catch(()=>{el('install').textContent='Offline installation status unavailable.'});
 }

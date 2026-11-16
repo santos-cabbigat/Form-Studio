@@ -108,7 +108,7 @@ function section(title,body){return '<section class="libSection"><h3 class="sect
 let lastLayerListing='';
 function drawLibrary(){
  if(tab==='Layers'){
-   const state=JSON.stringify([pageId,device,multi,selected,project.pages.map(p=>[p.id,p.name]),page().nodes.map(n=>[n.id,n.type,n.name,n.group,n.locked,n.hide?.[device]])]);
+   const state=JSON.stringify([pageId,device,multi,selected,treePageOptions(),page().nodes.map(n=>[n.id,n.type,n.name,n.group,n.locked,n.hide?.[device]])]);
    if(state===lastLayerListing)return;
    lastLayerListing=state;
  }else lastLayerListing='';
@@ -121,7 +121,7 @@ function drawLibrary(){
  pane+=section('Screen templates',[['signin','Sign-in screen','page',''],['ledger','Account ledger','table','mint'],['sample-entry','Sample entry form','input','mint'],['linked-entry','Entry & ledger tabs','table','mint'],['picker-demo','Picker with buttons','picker','mint'],['blank','Blank screen','insert','sand']].filter(a=>match(a[1])).map(a=>preset(...a)).join(''));
  pane+=section('My templates',templateRows(search)+btn('new-template','Add template','plus','addTemplate'));
  }else if(tab==='Layers'){
- pane='<div class="panel"><h2>Layers</h2>'+field('Screen or window','<select id="pageSelect">'+options(project.pages.map(p=>[p.id,p.name]),pageId)+'</select>')+
+ pane='<div class="panel"><h2>Layers</h2>'+field('Screen or window','<select id="pageSelect">'+options(treePageOptions(),pageId)+'</select>')+
  '<div class="row">'+btn('pages','Manage screens','page','btn smallBtn')+btn('find-project','Find in project','search','btn smallBtn')+'</div><div id="layerCommands">'+layerCommands()+'</div><h3 class="mt">Elements</h3>'+btn('multi',multi?'Finish selecting ('+selected.length+')':'Select multiple','group','btn smallBtn')+
  [...page().nodes].reverse().map(n=>'<button data-layer="'+n.id+'" class="layer '+(selected.includes(n.id)?'active':'')+'">'+icon(categoryIcon(n.type),15)+esc(n.name)+(n.locked?' · Locked':'')+(n.hide?.[device]?' · Hidden':'')+(n.group?' '+icon('group',12):'')+'</button>').join('')+'<div class="row">'+btn('group','Group','','btn smallBtn')+btn('ungroup','Ungroup','','btn smallBtn')+'</div><div class="row">'+btn('forward','Bring forward','','btn smallBtn')+btn('back','Send back','','btn smallBtn')+'</div>'+btn('delete','Delete selection','','btn smallBtn')+'</div>'
  }else if(tab==='Triggers'){
@@ -229,26 +229,33 @@ function addScreen(type){
  let p=type==='picker-demo'?pickerDemoScreen():['sample-entry','linked-entry'].includes(type)?sampleEntryScreen():type==='signin'?intro().pages[0]:makePage(type==='ledger'?'Account ledger':'Untitled screen');
  if(type==='ledger'){p.nodes=[node('Text','Account ledger',[36,40,380,46]),node('Button','Find account',[690,40,225,46]),createItem('Table','Ledger')];Object.assign(p.nodes[0].style,{fontSize:32,weight:700});p.nodes[2].boxes.laptop=[36,124,879,284]}
  const preset=projectPresets.find(t=>t.name===project.theme.preset);if(preset)for(const n of p.nodes)styleLayerForTheme(n,preset);
- change(()=>{if(type==='linked-entry'){const ledger=makePage('Ledger');p.name='Entry';const table=p.nodes.pop();table.boxes.laptop=[36,104,800,420];table.boxes.phone=[20,80,350,490];const title=node('Text','Ledger',[36,28,640,53]);title.style.fontSize=32;title.boxes.phone=[20,18,350,44];if(preset)styleLayerForTheme(title,preset);ledger.nodes=[title,table];project.pages.push(p,ledger);pageId=p.id;selected=[];pan=[0,0];zoomFactor=1;return}if(type==='signin'){const w=intro().pages[1];if(preset)for(const n of w.nodes)styleLayerForTheme(n,preset);p.nodes.at(-1).actions[0].target=w.id;project.pages.push(w)}project.pages.push(p);pageId=p.id;selected=[];pan=[0,0];zoomFactor=1});closeSide();dismiss();if(type==='blank')pageSettings()
+ const companions=[];
+ if(type==='linked-entry'){
+   const ledger=makePage('Ledger');p.name='Entry';const table=p.nodes.pop();
+   table.boxes.laptop=[36,104,800,420];table.boxes.phone=[20,80,350,490];
+   const title=node('Text','Ledger',[36,28,640,53]);title.style.fontSize=32;title.boxes.phone=[20,18,350,44];
+   if(preset)styleLayerForTheme(title,preset);ledger.nodes=[title,table];companions.push(ledger);
+ }else if(type==='signin'){
+   const win=intro().pages[1];if(preset)for(const n of win.nodes)styleLayerForTheme(n,preset);
+   p.nodes.at(-1).actions[0].target=win.id;companions.push(win);
+ }
+ createDestinations(p,companions);
 }
 function variantDialog(type,at){
  modal('Insert '+type.toLowerCase(),('<p class="hint">Choose a starting design or add one of your own.</p>')+variants[type].map((v,i)=>'<button class="variant" data-variant="'+i+'"><span>'+icon(categoryIcon(type))+v+'</span>'+icon('plus',15)+'</button>').join('')+project.templates.filter(t=>t.kind==='element'&&(pickerKind(t.node)?'Picker':t.node.type)===type||t.kind==='block'&&type==='Module'||t.kind==='window'&&type==='Window'||t.kind==='element'&&t.category===type).map(t=>preset('use-'+t.id,t.name,'library')).join('')+btn('type-template','Add a template','plus','addTemplate'));
  $('[data-cmd=type-template]').onclick=()=>templateDialog(null,type==='Button'?'button':'embed',type);
  $$('.dialog [data-variant]').forEach(el=>el.onclick=()=>{const ver=variants[type][+el.dataset.variant];
- if(type==='Window'){let w=makePage(ver,'window',ver==='Wide dialog'?640:440);if(ver!=='Blank window'){w.nodes=[node('Text','Window title',[24,38,330,40]),node('Button','Close',[24,157,145,44],{actions:[{event:'click',action:'close',target:''}]})];w.nodes[0].style.fontSize=27}const preset=projectPresets.find(t=>t.name===project.theme.preset);if(preset)for(const n of w.nodes)styleLayerForTheme(n,preset);change(()=>{project.pages.push(w);pageId=w.id;selected=[]});dismiss();closeSide();pageSettings();return}
+ if(type==='Window'){let w=makePage(ver,'window',ver==='Wide dialog'?640:440);if(ver!=='Blank window'){w.nodes=[node('Text','Window title',[24,38,330,40]),node('Button','Close',[24,157,145,44],{actions:[{event:'click',action:'close',target:''}]})];w.nodes[0].style.fontSize=27}const preset=projectPresets.find(t=>t.name===project.theme.preset);if(preset)for(const n of w.nodes)styleLayerForTheme(n,preset);createDestinations(w);return}
  const n=type==='Picker'?createPicker(ver.toLowerCase()):createItem(type,ver);if(type==='Image'&&ver==='Upload image')pickImage(src=>{n.src=src;insertNode(n,at)});else insertNode(n,at)
  })
 }
 function pickImage(cb){const inp=document.createElement('input');inp.type='file';inp.accept='image/png,image/jpeg,image/webp,image/gif';inp.onchange=()=>{const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{if(!/^data:image\/(png|jpeg|webp|gif);base64,/i.test(r.result)){toast('Choose a PNG, JPEG, GIF, or WebP image.');return}cb(r.result)};r.readAsDataURL(f)};inp.click()}
-function pagesDialog(){modal('Screens & windows',project.pages.map(p=>'<div class="pageRow"><button class="variant" data-page="'+p.id+'"><span>'+icon(p.kind==='window'?'window':'page')+esc(pageCaption(p))+'</span>'+icon(p.id===pageId?'check':'right',14)+'</button><button class="btn" data-delete-page="'+p.id+'">Delete</button></div>').join('')+'<div class="dialogActions">'+btn('find-project','Find in project','search')+btn('save-screen-template','Save template','library')+btn('page-settings','Edit current')+btn('blank','New screen','plus','btn primary')+'</div>')}
-function pageSettings(){const p=page();modal(p.kind==='window'?'Window settings':'Screen settings',field('Name','<input id="pgName" value="'+esc(p.name)+'">')+(p.kind==='window'?'<div class="row">'+field('Width (px)','<input id="pgWidth" type="number" min="120" max="2000" value="'+p.width+'">')+field('Height (px)','<input id="pgHeight" type="number" min="100" max="2400" value="'+p.height+'">')+'</div>':'')+'<div class="dialogActions">'+btn('dismiss','Cancel')+btn('save-page','Save','','btn primary')+'</div>')}
 function actionDialog(index=null,sample=null){
  const n=sel();if(!n){toast('Select an element for this trigger.');return}
  const old=sample||n.actions[index]||{};modal('Element trigger',field('Element','<input readonly value="'+esc(n.name)+'">')+triggerForm(old)+'<div id="actionError" class="error"></div><div class="dialogActions">'+(index===null?'':'<button class="btn" id="deleteThisTrigger">Delete trigger</button>')+btn('store-action','Save as template')+btn('commit-action','Apply trigger','check','btn primary')+'</div>');wireTargets(old);if(index!==null)$('#deleteThisTrigger').onclick=()=>{change(()=>n.actions.splice(index,1));dismiss()};
  $('[data-cmd=commit-action]').onclick=()=>{try{const a=readTrigger();change(()=>{if(index===null)n.actions.push(a);else n.actions[index]=a});dismiss();toast('Trigger applied')}catch(e){$('#actionError').textContent=e.message}};
  $('[data-cmd=store-action]').onclick=()=>{try{triggerTemplate(readTrigger())}catch(e){$('#actionError').textContent=e.message}}
 }
-function quickWindow(){const win=makePage('New window','window');win.nodes=[node('Text','Window title',[20,30,320,44]),node('Button','Close',[20,140,150,42],{actions:[{event:'click',action:'close',target:''}]})];change(()=>project.pages.push(win));wireTargets({action:'open',target:win.id});toast('Window added. Edit its size in Screens & windows.')}
 function triggerTemplate(action=null,existing=null){
  const a=action||existing?.action||{event:'click',action:'open',target:''};modal('Save trigger template',field('Template name','<input id="tplName" value="'+esc(existing?.name||names[a.action])+'">')+field('Trigger code (JSON)','<textarea rows="7" id="trCode">'+esc(JSON.stringify(a,null,2))+'</textarea>')+'<p class="hint">Set the event and action for this template. You can choose different destinations when inserting it.</p><div class="error" id="tplError"></div><div class="dialogActions">'+btn('commit-trigger-template','Save template','','btn primary')+'</div>');
  $('[data-cmd=commit-trigger-template]').onclick=()=>{try{let v=JSON.parse($('#trCode').value);if(!triggerOK(v)&&!(v.action==='open'&&v.target===''&&v.event==='click'))throw Error('Use one of the supported events and actions.');saveTemplate({id:existing?.id||uid(),kind:'trigger',name:requiredName(),action:{...v,event:v.event,action:v.action,target:String(v.target||'')}})}catch(e){$('#tplError').textContent=e.message}}
@@ -282,10 +289,12 @@ function templateDialog(existing=null,initialKind=null,category=null){
  if(category==='Window')n.boxes.laptop=[0,0,460,310];n.name=name;saveTemplate({id:existing?.id||uid(),kind:category==='Window'?'window':'element',category,name,node:n})}catch(e){$('#tplError').textContent=e.message}}
 }
 function useTemplate(t){if(!t)return;if(t.kind==='trigger'){actionDialog(null,t.action);return}
- if(t.kind==='window'&&t.node){const w=makePage(t.name,'window',t.node.boxes.laptop[2]);w.height=t.node.boxes.laptop[3];const content=clone(t.node);content.id=uid();content.boxes.laptop[0]=0;content.boxes.laptop[1]=0;w.nodes=[content];const preset=projectPresets.find(t=>t.name===project.theme.preset);if(preset)for(const n of w.nodes)styleLayerForTheme(n,preset);change(()=>{project.pages.push(w);pageId=w.id;selected=[content.id]});dismiss();closeSide();return}if(t.layout){
+ if(t.kind==='window'&&t.node){const w=makePage(t.name,'window',t.node.boxes.laptop[2]);w.height=t.node.boxes.laptop[3];const content=clone(t.node);content.id=uid();content.boxes.laptop[0]=0;content.boxes.laptop[1]=0;w.nodes=[content];const preset=projectPresets.find(t=>t.name===project.theme.preset);if(preset)for(const n of w.nodes)styleLayerForTheme(n,preset);createDestinations(w,[],[content.id]);return}if(t.layout){
  const layout=clone(t.layout),maps=new Map(layout.nodes.map(n=>[n.id,uid()])),groups=new Map();
  const newPageId=uid(),groupId=uid();for(const n of layout.nodes){n.id=maps.get(n.id);delete n.sharedComponent;if(n.picker?.footerButton)n.picker.footerButton=maps.get(n.picker.footerButton)||n.picker.footerButton;for(const a of n.actions){if(maps.has(a.source))a.source=maps.get(a.source);if(a.fields)a.fields=a.fields.map(id=>maps.get(id)||id);if(maps.has(a.target))a.target=maps.get(a.target);else if(a.target===layout.id)a.target=newPageId}if(t.kind==='block')n.group=groupId;else if(n.group){if(!groups.has(n.group))groups.set(n.group,uid());n.group=groups.get(n.group)}}
- change(()=>{if(t.kind==='block'){for(const n of layout.nodes){for(const b of Object.values(n.boxes)){b[0]+=12;b[1]+=12}page().nodes.push(n)}selected=layout.nodes.map(n=>n.id)}else{layout.id=newPageId;layout.name=t.name;project.pages.push(layout);pageId=layout.id;selected=[]}});dismiss();closeSide();return}
+ if(t.kind!=='block'){layout.id=newPageId;layout.name=t.name;delete layout.parentId;createDestinations(layout);return}
+ change(()=>{for(const n of layout.nodes){for(const b of Object.values(n.boxes)){b[0]+=12;b[1]+=12}page().nodes.push(n)}selected=layout.nodes.map(n=>n.id)});dismiss();closeSide();return}
+
  const n=clone(t.node);n.id=uid();delete n.sharedComponent;delete n.group;n.name=t.name;insertNode(n)}
 function manageTemplate(t){
  modal(t.name,'<div class="dialogActions">'+btn('rename-template','Rename')+(t.layout?'':btn('edit-template',t.kind==='trigger'||t.node?.type==='Custom'?'Edit code':'View code'))+btn('remove-template','Delete')+'</div>');
@@ -338,6 +347,12 @@ function validateImport(p){
  if(!pickerSettingValid(n.picker,pickerKind(n))||n.actions.some(a=>!triggerOK(a)))throw Error('An interaction is invalid.')};
  const seen=new Set();function unique(key){if(seen.has(key))throw Error('Two screens or layers share an ID. Each needs a unique ID.');seen.add(key)}
  for(const pg of p.pages){if(!pg||!id(pg.id)||typeof pg.name!=='string'||!Array.isArray(pg.nodes)||!['screen','window'].includes(pg.kind))throw Error('A screen definition is invalid.');if(pg.kind==='window'&&(!Number.isFinite(pg.width)||!Number.isFinite(pg.height)))throw Error('Window dimensions are invalid.');unique(pg.id);for(const n of pg.nodes){checkNode(n);unique(n.id)}}
+ if(p.categories!==undefined&&!Array.isArray(p.categories))throw Error('Invalid category list.');
+ for(const category of p.categories||[]){
+   if(!category||category.kind!=='category'||!id(category.id)||typeof category.name!=='string'||!category.name.trim())throw Error('A category is invalid.');
+   unique(category.id);
+ }
+ projectTree(p);
  p.templates.forEach(t=>{if(!id(t.id)||typeof t.name!=='string'||!['trigger','element','block','window','screen'].includes(t.kind))throw Error('A template is invalid.');if(t.kind==='element'||t.kind==='window'&&t.node){checkNode(t.node)}else if(t.kind!=='trigger'){if(!Array.isArray(t.layout?.nodes))throw Error('A template layout is invalid.');t.layout.nodes.forEach(checkNode)}else if(!triggerOK(t.action)&&!(t.action?.action==='open'&&t.action.target===''&&t.action.event==='click'))throw Error('Invalid trigger template.')});return p
 }
 function importFile(){const inp=document.createElement('input');inp.type='file';inp.accept='.json,application/json';inp.onchange=async()=>{if(!inp.files[0])return;try{const q=validateImport(JSON.parse(await inp.files[0].text()));if(write())saveNewDocument(q)}catch(e){toast(e.message)}};inp.click()}
@@ -357,9 +372,8 @@ function command(c){
  case 'preview':preview();break;case 'export':exportDialog();break;case 'dismiss':dismiss();break;
  case 'discard-code':dropCodeDraft();drawProps();break;case 'apply-code':applySelection();break;case 'copy-chat':copyForChat();break;case 'select-code':selectCode();break;case 'project-code':codeBrowser();break;case 'source-zip':downloadSources();break;case 'files':filesDialog();break;case 'new-file':newProject();break;case 'copy-file':newProject(true);break;case 'rename-file':$('#projectName').click();break;case 'cloud':cloudDialog();break;case 'save-selected':saveSelected();break;case 'pages':pagesDialog();break;case 'page-settings':pageSettings();break;
  case 'link-copy':placeLinked();break;case 'unlink-component':change(()=>selectedLayers().forEach(n=>delete n.sharedComponent),'Copy detached');break;case 'add-choice':editPickerChoice(-1,'add');break;case 'picker-demo':case 'linked-entry':case 'sample-entry':case 'signin':case 'blank':case 'ledger':addScreen(c);break;
- case 'save-page':{const v=$('#pgName').value.trim();const w=+($('#pgWidth')?.value||460),h=+($('#pgHeight')?.value||310);if(!v||w<120||w>2000||h<100||h>2400){toast('Enter a name and valid dimensions.');break}change(()=>{page().name=v;if(page().kind==='window'){page().width=w;page().height=h}});dismiss();break}
  case 'replace-image':if(n)pickImage(src=>change(()=>n.src=src));break;
- case 'save-screen-template':saveBlock(true);break;case 'new-template':templateDialog();break;case 'add-action':actionDialog();break;case 'quick-window':quickWindow();break;case 'new-trigger':triggerTemplate();break;
+ case 'save-screen-template':saveBlock(true);break;case 'new-template':templateDialog();break;case 'add-action':actionDialog();break;case 'new-trigger':triggerTemplate();break;
  case 'multi':multi=!multi;if(multi)selectIds([]);render();break;case 'group':groupNodes();break;
  case 'ungroup':{const groups=new Set(page().nodes.filter(n=>selected.includes(n.id)).map(n=>n.group).filter(Boolean));change(()=>page().nodes.filter(n=>groups.has(n.group)).forEach(n=>delete n.group));break}
  case 'forward':moveLayer(true);break;case 'back':moveLayer(false);break;case 'delete':removeSelection();break;

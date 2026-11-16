@@ -1,8 +1,4 @@
 'use strict';
-function pageCaption(pg){
- const matches=project.pages.filter(p=>p.kind===pg.kind&&p.name===pg.name);
- return matches.length>1?pg.name+' ('+(matches.indexOf(pg)+1)+' of '+matches.length+')':pg.name;
-}
 function deleteDestination(id){
  const pg=project.pages.find(p=>p.id===id);
  if(!pg)return;
@@ -12,9 +8,9 @@ function deleteDestination(id){
  const survivors=project.pages.filter(p=>p!==pg);
  const layers=survivors.flatMap(p=>p.nodes);
  const count=layers.reduce((n,l)=>n+l.actions.filter(hits).length,0);
- modal('Delete '+pg.kind+'?', '<p>Remove <strong>'+esc(pageCaption(pg))+'</strong> and its '+pg.nodes.length+' layers? '+count+' linked actions on other screens or windows will also be removed. Undo restores this edit.</p><div class="dialogActions">'+btn('pages','Cancel')+'<button class="btn" id="confirmPageRemoval">Delete '+pg.kind+'</button></div>');
+ modal('Delete '+pg.kind+'?', '<p>Remove <strong>'+esc(projectTree(project).caption(pg))+'</strong> and its '+pg.nodes.length+' layers? '+count+' linked actions on other screens or windows will also be removed. Any items grouped under it move up one level. Undo restores this edit.</p><div class="dialogActions">'+btn('pages','Cancel')+'<button class="btn" id="confirmPageRemoval">Delete '+pg.kind+'</button></div>');
  $('#confirmPageRemoval').onclick=()=>{
-   change(()=>{project.pages=survivors;for(const layer of layers){layer.actions=layer.actions.filter(a=>!hits(a));if(removed.has(layer.picker?.footerButton))delete layer.picker.footerButton}
+   change(()=>{promoteChildren(pg);project.pages=survivors;for(const layer of layers){layer.actions=layer.actions.filter(a=>!hits(a));if(removed.has(layer.picker?.footerButton))delete layer.picker.footerButton}
      if(pageId===id){pageId=survivors.find(p=>p.kind==='screen').id;selected=[];pan=[0,0];zoomFactor=1}
    });pagesDialog();
  };

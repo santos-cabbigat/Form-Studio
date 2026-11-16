@@ -81,7 +81,7 @@ main.inspectorClosed .workspace{grid-column:2/-1}
  width:min(46%,calc(var(--hit-size) * var(--inverse-scale,1)));height:min(46%,calc(var(--hit-size) * var(--inverse-scale,1)));border:0;background:transparent;
  right:auto;bottom:auto;transform:translate(-50%,-50%);touch-action:none;
 }
-.handle::after{content:"";position:absolute;inset:50% auto auto 50%;width:4px;height:4px;box-sizing:border-box;transform:translate(-50%,-50%) scale(var(--inverse-scale,1));border:1px solid #7943cf;background:white}
+.handle::after{content:"";position:absolute;inset:50% auto auto 50%;width:6px;height:6px;box-sizing:border-box;transform:translate(-50%,-50%) scale(var(--inverse-scale,1));border:1px solid #7943cf;background:white}
 .handle.tl,.handle.l,.handle.bl{left:0}.handle.t,.handle.b{left:50%}.handle.tr,.handle.r,.handle.br{left:100%}
 .handle.tl,.handle.t,.handle.tr{top:0}.handle.l,.handle.r{top:50%}.handle.bl,.handle.b,.handle.br{top:100%}
 .handle.l,.handle.r{cursor:ew-resize}.handle.t,.handle.b{cursor:ns-resize}
@@ -124,3 +124,18 @@ main .inspector.floatingInspector,main .inspector.wideCode,main .inspector.float
 .settingRow input[role=switch]{appearance:none;position:relative;flex:none;width:34px;height:20px;border-radius:12px;background:#b6b2bf;cursor:pointer}
 .settingRow input[role=switch]::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;background:#fff;border-radius:50%}
 .settingRow input[role=switch]:checked{background:var(--purple)}.settingRow input[role=switch]:checked::after{left:17px}
+
+.treeTools,.treeManage{display:flex;flex-wrap:wrap;gap:6px}.treeManage{margin-top:14px}
+.destinationTree{margin-top:10px;max-height:52dvh;overflow:auto;overscroll-behavior:contain}
+.treeRow,.treeTrigger{padding-left:calc(var(--depth)*15px);min-height:36px}
+.treeRow{display:flex;align-items:center;border-bottom:1px solid var(--line)}
+.treeChevron,.treeSpacer{width:26px;flex:none}.treeChevron,.treeEdit{min-height:34px;color:var(--muted)}
+.treeName,.treeTrigger{display:flex;align-items:center;gap:7px;text-align:left}
+.treeName{flex:1;min-width:0;min-height:36px;padding:4px 2px;font-weight:550}
+.treeName span{overflow-wrap:anywhere}.treeName[aria-current=page]{color:var(--purple)}
+.treeEdit{padding:0 10px;letter-spacing:1px}.treeTrigger{color:var(--muted);font-size:12px}
+.treeTrigger svg{margin-left:22px}.targetCreator{display:grid;gap:6px;margin:8px 0;padding:10px;border:1px solid var(--line);border-radius:8px}
+.targetCreator[hidden]{display:none}.targetCreator legend{font-weight:600}
+@media(max-width:620px){.treeRow,.treeTrigger{padding-left:calc(var(--depth)*10px)}.treeTools .btn{padding:5px 7px;font-size:12px}}
+
+[data-cmd=download-branch][hidden],#newTarget[hidden]{display:none}

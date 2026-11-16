@@ -1,7 +1,7 @@
 'use strict';
 
 // Bump with each editor shell release. Old tabs finish using their original bundle.
-const SHELL_VERSION = 'sequence1';
+const SHELL_VERSION = 'update1';
 const scope = new URL(self.registration.scope);
 const indexURL = new URL('index.html', scope).href;
 const cachePrefix = 'form-studio-shell:' + scope.href + ':';
@@ -50,17 +50,16 @@ async function cacheShell() {
   if (await shellComplete(cache)) return;
   const index = await publicFile(indexURL);
   const urls = shellAssets(await index.clone().text());
-  const responses = await Promise.all(urls.map(publicFile));
   // Commit the index last. An interrupted or partial download never marks a new
   // version ready, and never removes an earlier working version.
-  await Promise.all(urls.map((href, i) => cache.put(href, responses[i])));
+  await Promise.all(urls.map(async href => cache.put(href, await publicFile(href))));
   await cache.put(indexURL, index);
 }
 function prepareShell() {
   if (!preparing) preparing = cacheShell().finally(() => { preparing = null; });
   return preparing;
 }
-self.addEventListener('install', event => { event.waitUntil(prepareShell().then(()=>self.skipWaiting())); });
+self.addEventListener('install', event => { event.waitUntil(prepareShell()); });
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     await Promise.all((await caches.keys()).filter(key => key.startsWith(cachePrefix) && key !== cacheName).map(key => caches.delete(key)));
@@ -68,6 +67,9 @@ self.addEventListener('activate', event => {
   })());
 });
 self.addEventListener('message', event => {
+  if (event.data?.type === 'form-studio:apply-update') {
+    event.waitUntil(self.skipWaiting());return;
+  }
   if (event.data?.type !== 'form-studio:offline-status' || !event.ports[0]) return;
   const port = event.ports[0];
   event.waitUntil((async () => {
@@ -85,7 +87,11 @@ self.addEventListener('fetch', event => {
   if(request.mode==='navigate' && url.pathname===new URL('settings.html',scope).pathname){
     event.respondWith(fetch(request).catch(async()=>{const cache=await caches.open(cacheName);return await cache.match(new URL('settings.html',scope).href)||Response.error()}));return;
   }
-  if (accountPage || landing){event.respondWith(fetch(request).catch(async()=>{const cache=await caches.open(cacheName);return await cache.match(indexURL)||Response.error()}));return}
+  if (accountPage || landing){
+    // Load the exact editor shell that this worker finished installing.
+    event.respondWith((async()=>{const cache=await caches.open(cacheName);return await cache.match(indexURL)||fetch(request)})());
+    return;
+  }
   if (!editorAsset(url) && url.href!==new URL('Form-Studio-Handbook.pdf',scope).href) return;
   event.respondWith((async () => {
     const cache = await caches.open(cacheName);

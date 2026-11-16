@@ -8,17 +8,20 @@ function sourcePath(dir,n){
   const title=n.group?(n.groupName||'Group'):n.name;
   return dir+'/components/'+codeSlug(title)+'-'+(n.group||n.id)+'.js';
 }
+function screenDirectory(tree,pg){
+  return 'screens/'+tree.paths.get(pg.id).map(item=>codeSlug(item.name)+'-'+item.id).join('/');
+}
 function exportScreen(p,start){
   return p.pages.find(pg=>pg.id===start&&pg.kind==='screen')||p.pages.find(pg=>pg.kind==='screen');
 }
 function handoffText(p,start){
   const text=['# '+p.name,'','Extract this entire ZIP to a folder, then double-click index.html. The website opens offline in your browser. Keep index.html with the accompanying files and folders. Resize the browser window to see the laptop, tablet and phone layouts. Large screens load a bundled preview. Open source.html when editing individual screen or component scripts so the browser loads your changed files directly. Both entry points load your logic.js. To continue designing, use Files → Import JSON in Form Studio and select design.studio.json. That file includes your templates and device layouts.','','## Connect your logic','','Keep your own code in logic.js. The exported index loads it on startup. Save a copy of your edited logic.js before replacing a previous export, then carry it into the new folder. Form Studio imports visual project JSON; edits made directly in the exported JavaScript stay in your source files.','','An explicitly configured Developer action emits formstudio:action. Its detail contains name, screenId, layerId and event. Connect computation, authentication or a real save in your own code. Built-in sample rows and preview values last for one run.','','Starting screen: '+exportScreen(p,start).name,''];
-  const byId=new Map();
+  const tree=projectTree(p),byId=new Map();
   for(const pg of p.pages){byId.set(pg.id,pg.name);for(const n of pg.nodes)byId.set(n.id,pg.name+' / '+n.name)}
   const ref=id=>byId.get(id)||('unresolved '+id);
   for(const pg of p.pages){
-    const dir='screens/'+codeSlug(pg.name)+'-'+pg.id;
-    text.push('## '+pg.name+' ('+pg.kind+')','Screen file: '+dir+'/screen.js');
+    const dir=screenDirectory(tree,pg);
+    text.push('## '+tree.caption(pg)+' ('+pg.kind+')','Screen file: '+dir+'/screen.js');
     if(pg.devNote)text.push('Developer note: '+pg.devNote);
     for(const n of pg.nodes){
       if(!n.devNote&&!n.actions.length)continue;
@@ -43,13 +46,13 @@ function starterLogic(){
 }
 function projectSources(p,start,includeHandoff=true) {
   const encode=value=>JSON.stringify(value,null,2);
-  const files=new Map(), tags=[],screenFiles=new Map();
+  const files=new Map(), tags=[],screenFiles=new Map(),tree=projectTree(p);
   function script(path,body){files.set(path,body+'\n');tags.push('<script src="./'+path+'"></script>')}
   script('shared/runtime.js',runtimeCode());
   const {pages,templates,...settings}=p;
   script('project.js','const studioProject = '+encode({...settings,pages:[]})+';\nconst studioLayers = new Map();');
   for(const pg of pages){
-    const dir='screens/'+codeSlug(pg.name)+'-'+pg.id;
+    const dir=screenDirectory(tree,pg);
     const bundles=new Map();
     for(const n of pg.nodes){const id=n.group||n.id;if(!bundles.has(id))bundles.set(id,[]);bundles.get(id).push(n)}
     const calls=[],bundle=[];
@@ -105,7 +108,7 @@ async function downloadSources(){
     let zip;
     if(window.Worker&&model.pages.reduce((sum,pg)=>sum+pg.nodes.length,0)>=150){
       toast('Preparing your source ZIP');
-      const defs=[codeSlug,sourcePath,exportScreen,starterLogic,handoffText,esc,runtimeHead,projectSources,sourceZip].map(fn=>'const '+fn.name+' = '+fn.toString()+';');
+      const defs=[projectTree,screenDirectory,codeSlug,sourcePath,exportScreen,starterLogic,handoffText,esc,runtimeHead,projectSources,sourceZip].map(fn=>'const '+fn.name+' = '+fn.toString()+';');
       defs.push('const nativeCSS='+JSON.stringify(nativeCSS)+';','const pickerCSS='+JSON.stringify(pickerCSS)+';','const runtimeCode=()=>'+JSON.stringify(runtimeCode())+';');
       defs.push('onmessage=e=>{try{postMessage(sourceZip(projectSources(e.data.model,e.data.start)))}catch(err){postMessage({error:err.message})}};');
       url=URL.createObjectURL(new Blob([defs.join('\n')],{type:'text/javascript'}));
@@ -115,19 +118,50 @@ async function downloadSources(){
     download(zip,filename,'application/zip');toast('Project source downloaded');
   }catch(e){toast('Source export failed. '+e.message)}finally{worker?.terminate();if(url)URL.revokeObjectURL(url);sourceExportRunning=false}
 }
-function codeBrowser(initial=pageId){
-  const pg=project.pages.find(q=>q.id===initial)||page();
-  const files=projectSources(project,pageId,false),prefix='screens/'+codeSlug(pg.name)+'-'+pg.id+'/';
-  const fileList=[prefix+'screen.js',...[...files.keys()].filter(path=>path.startsWith(prefix+'components/')),'project.js','shared/runtime.js','logic.js','start.js','index.html'];
-  modal('Project code',field('Screen or window','<select id="codePage">'+options(project.pages.map(q=>[q.id,q.name]),pg.id)+'</select>')+field('Code file','<select id="codePath">'+options(fileList.map(path=>[path,path===prefix+'screen.js'?'Screen code':path.replace(prefix,'')]),fileList[0])+'</select>')+field('Selected file','<textarea readonly id="projectSource" rows="9" spellcheck="false"></textarea>')+'<p>Screen and component files connect automatically through the project. Select a layer in the editor to change its code.</p><div class="fileActions">'+btn('open-code-layer','Edit selected code')+btn('add-code-block','Add code block')+btn('source-zip','Download source ZIP','export','btn primary')+'</div>',true);
+function codeBrowser(initial=pageId,grouped=false){
+  const tree=projectTree(project),item=tree.byId.get(initial)||page();
+  const files=projectSources(project,pageId,false),fileOwners=new Map();
+  const branch=tree.ordered.filter(q=>q.kind!=='category'&&tree.paths.get(q.id).includes(item));
+  for(const pg of branch){
+    const dir=screenDirectory(tree,pg);
+    for(const n of pg.nodes)fileOwners.set(sourcePath(dir,n),pg);
+    fileOwners.set(dir+'/screen.js',pg);
+  }
+  const codePage=tree.ordered.map(q=>[q.id,tree.caption(q)+(q.kind==='category'?' (category)':'')]);
+  const labels=[['@group','Grouped code · '+branch.length+' '+(branch.length===1?'screen or window':'screens and windows')]];
+  for(const [path,pg] of fileOwners){
+    const file=path.slice(screenDirectory(tree,pg).length+1);
+    labels.push([path,(branch.length>1?tree.caption(pg)+' / ':'')+(file==='screen.js'?'Screen code':file)]);
+  }
+  for(const path of ['project.js','shared/runtime.js','logic.js','start.js','index.html'])labels.push([path,path]);
+  const selected=grouped||item.kind==='category'?'@group':screenDirectory(tree,item)+'/screen.js';
+  modal('Project code',field('Category, screen or window','<select id="codePage">'+options(codePage,item.id)+'</select>')+
+    field('Code file','<select id="codePath">'+options(labels,selected)+'</select>')+field('Selected code','<textarea readonly id="projectSource" rows="9" spellcheck="false"></textarea>')+
+    '<p class="hint">Grouped code includes the screens, windows, layers and triggers in this branch.</p><div class="fileActions">'+
+    btn('copy-branch','Copy code','code')+btn('download-branch','Download grouped code','export')+btn('open-code-layer','Edit selected code')+
+    btn('add-code-block','Add code block')+btn('source-zip','Download source ZIP','export','btn primary')+'</div>',true);
   const area=$('#projectSource'),file=$('#codePath'),edit=$('[data-cmd=open-code-layer]');
-  function display(){area.value=files.get(file.value);area.scrollTop=0;edit.disabled=!file.value.startsWith(prefix);}
+  const save=$('[data-cmd=download-branch]'),add=$('[data-cmd=add-code-block]');
+  function display(){
+    const combined=file.value==='@group';
+    area.value=combined?[...fileOwners.keys()].map(path=>'// '+path+'\n'+files.get(path)).join('\n'):files.get(file.value);
+    area.scrollTop=0;edit.disabled=!fileOwners.has(file.value);add.disabled=item.kind==='category';
+    save.hidden=!combined;save.disabled=!branch.length;
+    $('[data-cmd=copy-branch]').disabled=!area.value;
+  }
   file.onchange=display;$('#codePage').onchange=e=>codeBrowser(e.target.value);
+  $('[data-cmd=copy-branch]').onclick=async()=>{
+    try{await navigator.clipboard.writeText(area.value);toast('Code copied')}
+    catch{area.select();toast('Code selected. Use Copy to copy it.')}
+  };
+  save.onclick=()=>download(area.value,codeSlug(item.name)+'-group.js','text/javascript');
   edit.onclick=()=>{
-    const path=file.value;choosePage(pg.id);const nodes=pg.nodes.filter(n=>sourcePath(prefix.slice(0,-1),n)===path);selectIds(nodes.map(n=>n.id));mode='code';drawProps();if(innerWidth<=850)$('#inspector').classList.add('shown');
+    const path=file.value,pg=fileOwners.get(path);if(!pg)return;
+    choosePage(pg.id);const dir=screenDirectory(tree,pg);
+    selectIds(pg.nodes.filter(n=>sourcePath(dir,n)===path).map(n=>n.id));mode='code';drawProps();if(innerWidth<=850)$('#inspector').classList.add('shown');
   };
   $('[data-cmd=add-code-block]').onclick=()=>{
-    choosePage(pg.id);modal('Add code block',field('Block name','<input id="blockName" placeholder="e.g. Sidebar">')+field('HTML and CSS','<textarea id="blockHTML" rows="8" spellcheck="false">&lt;aside&gt;Sidebar&lt;/aside&gt;</textarea>')+'<div class="dialogActions">'+btn('commit-code-block','Insert block','','btn primary')+'</div>');
+    choosePage(item.id);modal('Add code block',field('Block name','<input id="blockName" placeholder="e.g. Sidebar">')+field('HTML and CSS','<textarea id="blockHTML" rows="8" spellcheck="false">&lt;aside&gt;Sidebar&lt;/aside&gt;</textarea>')+'<div class="dialogActions">'+btn('commit-code-block','Insert block','','btn primary')+'</div>');
     $('[data-cmd=commit-code-block]').onclick=()=>{const name=$('#blockName').value.trim(),html=$('#blockHTML').value.trim();if(!name||!html){toast('Enter a block name and code.');return}insertNode(node('Custom',name,[20,20,220,100],{html}));};
   };
   display();

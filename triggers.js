@@ -47,7 +47,7 @@ function pickerOperations(n){
 }
 function targetChoices(action) {
   if(action==='saveRow')return tablesInProject().map(({pg,n})=>[n.id,pg.name+' / '+n.name]);
-  if(action==='open'||action==='go')return project.pages.filter(p=>p.kind===(action==='open'?'window':'screen')).map(p=>[p.id,pageCaption(p)]);
+  if(action==='open'||action==='go')return treePageOptions(action==='open'?'window':'screen');
   if(action==='copyValue'||action==='loadValue')return project.pages.flatMap(pg=>pg.nodes.filter(n=>n.type==='Input'&&n.inputType!=='password').map(n=>[n.id,pg.name+' / '+n.name]));
   if(action==='pickerAction')return inputsOnPage().filter(n=>pickerKind(n)).map(n=>[n.id,n.name]);
   if(action==='passwordDemo')return inputsOnPage(true).filter(n=>n.inputType==='password').map(n=>[n.id,n.name]);
@@ -110,6 +110,25 @@ function triggerForm(old={}){
     field('Wait before this action (seconds)','<input id="triggerDelay" type="number" min="0" step="0.001" value="'+esc((old.delayMs||0)/1000)+'">')+
     '<p class="hint">Actions for the same event run from top to bottom. A wait starts after the previous action finishes.</p>';
 }
+function triggerDestinationCreator(container,action){
+  const kind=action==='open'?'window':'screen',label='Create a '+kind;
+  container.insertAdjacentHTML('beforeend','<button type="button" id="newTarget" class="btn smallBtn">'+label+'</button><fieldset class="targetCreator" hidden><legend>'+label+'</legend>'+
+    field('Name','<input id="targetName" value="New '+kind+'">')+locationField({kind},pageId,'targetParent')+
+    '<div class="row"><button type="button" id="cancelTarget" class="btn">Cancel</button><button type="button" id="saveTarget" class="btn primary">Create '+kind+'</button></div></fieldset>');
+  const creator=container.querySelector('fieldset'),open=container.querySelector('#newTarget');
+  open.onclick=()=>{open.hidden=true;creator.hidden=false;$('#targetName').select()};
+  $('#cancelTarget').onclick=()=>{creator.hidden=true;open.hidden=false;open.focus()};
+  $('#saveTarget').onclick=()=>{
+    const name=$('#targetName').value.trim();
+    if(!name){$('#actionError').textContent='Enter a name for the '+kind+'.';return}
+    const pg=makePage(name,kind);setParent(pg,$('#targetParent').value);
+    if(kind==='window')pg.nodes=[node('Text',name,[20,30,320,44]),node('Button','Close',[20,140,150,42],{actions:[{event:'click',action:'close',target:''}]})];
+    change(()=>project.pages.push(pg));
+    $('#target').innerHTML=options([['','Choose…'],...targetChoices(action)],pg.id);
+    $('#actionError').textContent='';creator.hidden=true;open.hidden=false;$('#target').focus();
+    toast(cap(kind)+' created');
+  };
+}
 function wireTargets(old={}){
   const area=$('#targetArea'),ac=$('#ac');
   const msg=(label,fallback)=>field(label,'<input id="triggerMessage" value="'+esc(old.message??fallback)+'">');
@@ -137,7 +156,8 @@ function wireTargets(old={}){
       el.innerHTML=target('Which picker?')+'<div id="pickOperation"></div>';
       const op=()=>{const id=$('#target').value;$('#pickOperation').innerHTML=id?triggerSelect('operation','Picker action',pickerOperations(page().nodes.find(n=>n.id===id)),current.operation):''};$('#target').onchange=op;op();
     }else{
-      el.innerHTML=target(action==='saveRow'?'Destination table':'Target')+(action==='open'?btn('quick-window','Create a window','plus','btn smallBtn'):'');
+      el.innerHTML=target(action==='saveRow'?'Destination table':'Target');
+      if(action==='open'||action==='go')triggerDestinationCreator(el,action);
       if(action==='saveRow'){el.insertAdjacentHTML('beforeend','<div id="saveFields"></div>');$('#target').onchange=()=>saveRowSettings(current);saveRowSettings(current)}
     }
     if(!targets.length)el.insertAdjacentHTML('beforeend',hint(action==='passwordDemo'?'Insert a password input to try this.':action==='pickerAction'?'Insert a Picker on this screen first.':'Add a matching destination or field first.'));

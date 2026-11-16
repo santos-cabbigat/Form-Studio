@@ -67,7 +67,7 @@ function importHTMLDialog(initial='',initialName=''){
     '<details><summary>Additional CSS</summary>'+field('CSS from a separate stylesheet','<textarea id="importCSS" rows="3" spellcheck="false"></textarea>')+'</details>'+
     field('Add layers to','<select id="htmlDestination"><option value="new">New screen</option><option value="current">Current '+esc(page().kind)+' · '+esc(page().name)+'</option></select>')+
     field('New screen name','<input id="importName" maxlength="160" value="'+esc(initialName)+'" placeholder="Imported design">')+
-    '<p class="hint" id="htmlPlacement"></p><div id="htmlImportStatus" role="status" aria-live="polite"></div>'+
+    locationField({kind:'screen'},page().parentId||'','importParent')+'<p class="hint" id="htmlPlacement"></p><div id="htmlImportStatus" role="status" aria-live="polite"></div>'+
     '<div class="dialogActions">'+btn('inspect-html','Check layers','layers')+btn('commit-html','Add layers','plus','btn primary')+'</div>',true);
   const input=$('#importHTML'),css=$('#importCSS'),name=$('#importName'),dest=$('#htmlDestination'),status=$('#htmlImportStatus'),file=$('#htmlFile');
   const check=$('[data-cmd=inspect-html]'),add=$('[data-cmd=commit-html]');
@@ -75,6 +75,7 @@ function importHTMLDialog(initial='',initialName=''){
   function reset(){
     ticket++;prepared=null;status.replaceChildren();check.disabled=false;add.disabled=true;
     name.closest('label').hidden=dest.value==='current';
+    $('#importParent').closest('label').hidden=dest.value==='current';
     $('#htmlPlacement').textContent=dest.value==='current'&&page().nodes.length?
       (page().kind==='window'?'Places the layers inside this window.':'Places the section below the existing layers on this screen.'):'Checks the laptop, tablet and phone layouts before adding any layers.';
   }
@@ -119,7 +120,7 @@ function importHTMLDialog(initial='',initialName=''){
   add.onclick=()=>{
     if(!prepared)return;
     const {pg,nodes,append,backgrounds}=prepared;prepared=null;add.disabled=true;
-    if(!append){pg.name=name.value.trim()||'Imported design';if(Object.keys(backgrounds).length)pg.backgrounds=backgrounds}
+    if(!append){setParent(pg,$('#importParent').value);pg.name=name.value.trim()||'Imported design';if(Object.keys(backgrounds).length)pg.backgrounds=backgrounds}
     const active=nodes.filter(n=>!n.hide?.[device]);
     const focus=active.find(n=>n.type==='Button')||active.find(n=>n.type!=='Shape'&&n.type!=='Module')||active[0];
     endReferencePick();closeSide();dismiss();

@@ -32,8 +32,8 @@ function linkedPart(){
   return '<div class="part"><h3>Shared component</h3>'+btn('link-copy','Place linked copy','group','btn full')+(linked?btn('unlink-component','Detach this copy','','chip'):'')+'</div>';
 }
 function placeLinked(){
-  const source=selectedLayers(),destinations=project.pages.filter(p=>p.id!==pageId);
-  modal('Place linked copy',triggerSelect('linkTarget','Destination screen or window',destinations.map(p=>[p.id,p.name]))+
+  const source=selectedLayers();
+  modal('Place linked copy',triggerSelect('linkTarget','Destination screen or window',treePageOptions().filter(([id])=>id!==pageId))+
     '<p>Changes to the content and appearance update every linked copy. Each screen keeps its own position and triggers.</p><div class="dialogActions">'+btn('dismiss','Cancel')+btn('place-linked','Place copy','','btn primary')+'</div>');
   $('[data-cmd=place-linked]').onclick=()=>{
     const dest=project.pages.find(p=>p.id===$('#linkTarget').value);

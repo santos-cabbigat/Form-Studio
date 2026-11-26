@@ -193,3 +193,6 @@ main>.library{grid-row:1;grid-column:1}
 .deviceSizeGrid{display:grid;grid-template-columns:minmax(70px,1fr) minmax(75px,1fr) minmax(75px,1fr);align-items:center;gap:9px;margin:14px 0}.deviceSizeGrid>b{font-size:11px;color:var(--muted)}.deviceSizeGrid select,.deviceSizeGrid input{width:100%;min-width:0;padding:7px;border:1px solid var(--line);border-radius:5px;background:white}.deviceSizeGrid label{font-size:12px}#deviceSizeForm>.row{gap:8px;flex-wrap:wrap}#deviceSizeResult{margin-bottom:0}
 
 #canvasPreviewFrame{position:absolute;top:0;left:0;transform-origin:top left;border:0;display:block;background:white}
+.nodeWrap.selected:has(>.object[data-joined-edges]){outline:none}
+
+.joinBacking{position:absolute;display:block;pointer-events:none}

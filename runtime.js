@@ -1,4 +1,9 @@
 const nativeCSS=`
+.object[data-joined-edges]{border-width:0!important}
+.joinPaint{position:absolute;inset:0;display:block;pointer-events:none;border-radius:inherit}
+.joinTL{border-top-left-radius:0!important}.joinTR{border-top-right-radius:0!important}
+.joinBL{border-bottom-left-radius:0!important}.joinBR{border-bottom-right-radius:0!important}
+
 *{box-sizing:border-box}.object{position:absolute;margin:0;line-height:1.25;font-family:inherit;overflow:hidden}.object[data-type=Icon]{display:grid;place-items:center;padding:0}.object[data-type=Icon]>svg{display:block;width:100%;height:100%}button.object[data-type=Icon]{cursor:pointer}.object[data-type=Button]{cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0 8px}.object[data-type=Text]{white-space:pre-wrap;display:flex;align-items:center;line-height:1.18;letter-spacing:-.025em}.object[data-type=Input]{padding:0 14px}input.object::placeholder{color:inherit;opacity:.7}.object[data-type=Image]{object-fit:cover;display:block}.object[data-type=Table]{padding:0}.object table{width:100%;border-collapse:collapse;font-size:inherit;color:inherit}.object th,.object td{padding:7px 10px;border-bottom:1px solid var(--table-line,#dedbe6);text-align:left}.object th{background:var(--table-tint,#f3effa);color:var(--table-heading,inherit)}.object[data-type=Custom]{border:0}.object[data-type=Button]:focus-visible,.object[tabindex]:focus-visible{outline:3px solid #8763dd}
 `;
 function cssProps(n,b){let s=n.style;return {left:b[0]+'px',top:b[1]+'px',width:b[2]+'px',height:b[3]+'px','background-color':s.fill,color:s.color,'border-radius':s.radius+'px','font-size':s.fontSize+'px','font-weight':String(s.weight),border:s.border,'text-align':s.align,...n.extraCSS}}
@@ -46,6 +51,93 @@ function makeEl(n,b,edit=false,rows){
  if(edit){el.tabIndex=-1;if(el.tagName==='INPUT')el.readOnly=true}
  return el
 }
+// Find the actual shared segment, including a short side touching the middle of a longer one.
+function rectangleContacts(rectangles){
+ const ends=[new Map(),new Map()],contacts=new Map();
+ function add(r,axis,side,low,high,otherFill){
+   if(!contacts.has(r.id))contacts.set(r.id,[]);
+   contacts.get(r.id).push([axis,side,low-r.box[1-axis],high-r.box[1-axis],otherFill]);
+ }
+ for(const r of rectangles)for(let axis=0;axis<2;axis++){
+   const edge=r.box[axis]+r.box[axis+2],index=ends[axis];
+   if(!index.has(edge))index.set(edge,[]);
+   index.get(edge).push(r);
+ }
+ for(const r of rectangles)for(let axis=0;axis<2;axis++){
+   const other=1-axis;
+   for(const neighbor of ends[axis].get(r.box[axis])||[]){
+     const low=Math.max(r.box[other],neighbor.box[other]);
+     const high=Math.min(r.box[other]+r.box[other+2],neighbor.box[other]+neighbor.box[other+2]);
+     if(high>=low){add(r,axis,0,low,high,neighbor.fill);add(neighbor,axis,1,low,high,r.fill)}
+   }
+ }
+ return contacts;
+}
+
+function paintRectangleContacts(board,pg,device,project,hidden){
+ const rects=[];
+ for(const n of pg.nodes){
+   if(n.type==='Shape'&&n.variant==='Rectangle'&&!n.hide?.[device]&&!hidden?.has(n.id))
+     rects.push({id:n.id,fill:n.extraCSS?.['background-color']||n.style.fill,box:boxFor(n,device,project,pg)});
+ }
+ const contacts=rectangleContacts(rects),boxes=new Map(rects.map(r=>[r.id,r.box]));
+ for(const el of board.querySelectorAll('.object[data-type="Shape"]')){
+   const segments=contacts.get(el.dataset.id)||[];
+   const box=boxes.get(el.dataset.id);
+   const wrapper=el.parentElement.classList.contains('nodeWrap')?el.parentElement:null;
+   const key=segments.length?JSON.stringify([box.slice(2),segments]):'';
+   if((el.dataset.joinedEdges||'')===key&&(!wrapper||wrapper.dataset.joinKey===key||(!key&&!wrapper.dataset.joinKey)))continue;
+   if(wrapper){
+     wrapper.querySelectorAll('.joinBacking').forEach(patch=>patch.remove());
+     if(key)wrapper.dataset.joinKey=key;else delete wrapper.dataset.joinKey;
+   }
+   for(const patch of el.querySelectorAll('.joinPaint'))patch.remove();
+   el.classList.remove('joinTL','joinTR','joinBL','joinBR');
+   if(!key){delete el.dataset.joinedEdges;continue}
+   el.dataset.joinedEdges=key;
+   const outline=document.createElement('i');outline.className='joinPaint';outline.setAttribute('aria-hidden','true');
+   for(const side of ['Left','Right','Top','Bottom'])outline.style['border'+side]=el.style['border'+side];
+   el.append(outline);
+   const st=getComputedStyle(outline);
+   const border=[st.borderLeftWidth,st.borderRightWidth,st.borderTopWidth,st.borderBottomWidth].map(parseFloat);
+   const cuts=[];
+   for(const [axis,side,lo,hi,otherFill] of segments){
+     const start=axis===0?(side?'joinTR':'joinTL'):(side?'joinBL':'joinTL');
+     const end=axis===0?(side?'joinBR':'joinBL'):(side?'joinBR':'joinTR');
+     if(lo===0)el.classList.add(start);
+     if(hi===box[3-axis])el.classList.add(end);
+     if(hi===lo)continue;
+     // Paint a solid strip at the shared edge so independently rasterized
+     // rounded layers leave no antialiasing seam at fractional editor zoom.
+     if(wrapper){
+       const fill=getComputedStyle(el).backgroundColor;
+       if(fill.startsWith('rgb(')){
+         const patch=document.createElement('i');patch.className='joinBacking';patch.setAttribute('aria-hidden','true');
+         patch.style.backgroundColor=otherFill;
+         const sameFill=patch.style.backgroundColor===fill;
+         const depth=3,span=depth+(sameFill?depth:0);
+         const edge=side?box[axis+2]-depth:(sameFill?-depth:0);
+         Object.assign(patch.style,{backgroundColor:fill,left:(axis===0?edge:lo)+'px',top:(axis===0?lo:edge)+'px',
+           width:(axis===0?span:hi-lo)+'px',height:(axis===0?hi-lo:span)+'px'});
+         el.after(patch);
+       }
+     }
+     const thickness=border[axis*2+side];
+     if(!thickness)continue;
+     // Cut the outline itself so fractional zoom cannot reveal a sliver under an overpaint.
+     const depth=Math.ceil(thickness)+2;
+     const anchor=side?'100%':'0%';
+     const pos=axis===0?anchor+' '+lo+'px':lo+'px '+anchor;
+     const size=axis===0?depth+'px '+(hi-lo)+'px':(hi-lo)+'px '+depth+'px';
+     cuts.push('linear-gradient(black,black) '+pos+' / '+size+' no-repeat');
+   }
+   if(cuts.length){
+     outline.style.mask=['linear-gradient(black,black)',...cuts].join(',');
+     outline.style.maskComposite=['subtract',...cuts.map(()=>'add')].join(',');
+   }
+ }
+}
+
 function runtime(p,mode,start,forcedDevice,response='success',interactivePreview=false){
  const root=document.getElementById('app'),surface=document.createElement('main'),modal=document.createElement('dialog');
  root.classList.toggle('interactivePreview',interactivePreview);
@@ -113,7 +205,8 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
      const input=element(a.target,board);
      if(n?.type!=='Input'||n.inputType!=='password'||!input){notify('Choose a password field on this screen.');return false}
      const reveal=input.type==='password';input.type=reveal?'text':'password';
-     for(const control of board.querySelectorAll('[data-password-toggle]')){
+     paintRectangleContacts(board,page,d,p,hidden);
+ for(const control of board.querySelectorAll('[data-password-toggle]')){
        if(control.dataset.passwordToggle!==a.target)continue;
        control.setAttribute('aria-pressed',String(reveal));
        control.setAttribute('aria-label',(reveal?'Hide password':'Show password')+' · '+n.name);
@@ -176,6 +269,7 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
  if(n.actions?.length){if(el.tabIndex<0)el.tabIndex=0;
  el.addEventListener('click',()=>act(n,'click',board));el.addEventListener('keydown',e=>{if(e.key==='Enter'&&n.actions.some(a=>a.event==='enter')){e.preventDefault();act(n,'enter',board)}})}
  });
+ paintRectangleContacts(board,page,d,p,hidden);
  for(const control of board.querySelectorAll('[data-studio-icon][data-password-toggle]')){
    const input=element(control.dataset.passwordToggle,board);
    if(!input)continue;
@@ -258,6 +352,7 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
              if(hide)hidden.add(id);else hidden.delete(id);
              el.style.visibility=hide?'hidden':'visible';
            }
+           paintRectangleContacts(board,p.pages.find(pg=>pg.id===board.dataset.pageId),device(),p,hidden);
            break;
          }
        }
@@ -315,7 +410,7 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
  draw()
 }
 function runtimeCode(){
- const funcs=[icon,esc,cap,editableCanvasWidth,boxFor,deviceViewport,bounds,cssProps,tableLines,dropdownChoices,tableMarkup,seedRows,columnKeys,mappedFields,pickerKind,pickerFormatOptions,pickerLabel,pickerMarkup,acceptsPickerValue,pickerController,labelHTML,markup,customDoc,makeEl,runtime];
+ const funcs=[icon,esc,cap,editableCanvasWidth,boxFor,deviceViewport,bounds,cssProps,tableLines,dropdownChoices,tableMarkup,seedRows,columnKeys,mappedFields,pickerKind,pickerFormatOptions,pickerLabel,pickerMarkup,acceptsPickerValue,pickerController,labelHTML,markup,customDoc,makeEl,rectangleContacts,paintRectangleContacts,runtime];
  return 'const paths='+JSON.stringify(paths)+';\nconst devices='+JSON.stringify(devices)+';\n'+funcs.map(f=>'const '+f.name+' = '+f.toString()+';').join('\n');
 }
 function runtimeHead(p){

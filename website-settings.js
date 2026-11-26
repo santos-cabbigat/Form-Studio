@@ -1,5 +1,5 @@
 'use strict';
-const STUDIO_RELEASE='canvas-preview5';
+const STUDIO_RELEASE='shape-joins6';
 
 function activateStudioUpdate(worker){
  const sw=navigator.serviceWorker;

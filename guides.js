@@ -77,8 +77,8 @@ function matchGuide(axis, rect, handle, targets, tolerance) {
   const other=1-axis, crossStart=rect[other], crossEnd=crossStart+rect[other+2];
   // Give the physical boundary priority inside a ten-screen-pixel capture zone.
   const frame=targets.find(target=>target.canvas);
+  let edgeMatch=null;
   if(frame){
-    let edgeMatch=null;
     for(const side of ['start','end']){
       if(handle&&side!==(low?'start':'end'))continue;
       const line=frame.box[axis]+(side==='end'?frame.box[axis+2]:0);
@@ -87,7 +87,6 @@ function matchGuide(axis, rect, handle, targets, tolerance) {
       if(!edgeMatch||Math.abs(delta)<Math.abs(edgeMatch.delta))
         edgeMatch={axis,delta,target:frame,line,from:side,to:side,canvasEdge:true};
     }
-    if(edgeMatch)return edgeMatch;
   }
   let best=null,previous=null,next=null;
   const crossGap=target=>Math.max(0,target.box[other]-crossEnd,crossStart-target.box[other]-target.box[other+2]);
@@ -105,6 +104,7 @@ function matchGuide(axis, rect, handle, targets, tolerance) {
       if(!contact||score<contact.score)contact={axis,delta,target,line,from,to,score};
     }
   }
+  if(edgeMatch&&(!contact||Math.abs(edgeMatch.delta)<=Math.abs(contact.delta)))return edgeMatch;
   if(contact)return contact;
   function consider(delta,target,line,from,to,equalSize=false,pair=null){
     const gap=Math.abs(delta);
@@ -173,6 +173,22 @@ function guidedBounds(before, dx, dy, handle, targets, tolerance) {
     }
     if(corner)matches[other]=corner;
   }
+  // Preserve deliberate gaps of one design millimetre or more, even when a page guide
+  // coincides with a neighbor. Crossing slightly into the neighbor can still catch its edge.
+  for(const axis of [0,1]){
+    const m=matches[axis];
+    if(!m||Math.abs(m.delta)<96/25.4)continue;
+    const other=1-axis;
+    const start=raw[axis],end=start+raw[axis+2];
+    const moveStart=!handle||(axis===0?left:top),moveEnd=!handle||(axis===0?right:bottom);
+    const closesGap=targets.some(({box,canvas})=>{
+      if(canvas||box[other]>raw[other]+raw[other+2]+2*tolerance||raw[other]>box[other]+box[other+2]+2*tolerance)return false;
+      const low=box[axis],high=low+box[axis+2];
+      return (moveStart&&start>high&&Math.round(start+m.delta)===high)||
+             (moveEnd&&end<low&&Math.round(end+m.delta)===low);
+    });
+    if(closesGap)matches[axis]=null;
+  }
   const x=matches[0]?.delta||0,y=matches[1]?.delta||0;
   if(!handle||left) l+=x;
   if(!handle||right) r+=x;
@@ -239,7 +255,8 @@ function drawGuides(rect, matches, handle, targets) {
       for(const box of [rect,same.box])line(axis===1,box[other]+box[other+2]+3/zoom,box[axis],box[axis]+size,true);
     }
   }
-  for(const target of new Set(matches.filter(m=>m&&!m.equalSize&&!m.pair&&!m.target.canvas).map(m=>m.target))){
+  for(const target of targets){
+    if(target.canvas)continue;
     const box=target.box;
     const x=[rect[0],rect[0]+rect[2]].find(x=>[box[0],box[0]+box[2]].some(v=>Math.abs(x-v)<.51));
     const y=[rect[1],rect[1]+rect[3]].find(y=>[box[1],box[1]+box[3]].some(v=>Math.abs(y-v)<.51));

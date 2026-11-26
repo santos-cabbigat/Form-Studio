@@ -5,7 +5,7 @@ const vm=require('node:vm');
 const path=require('node:path');
 const root=path.resolve(__dirname,'..');
 const context=vm.createContext({});
-for(const name of ['art.js','model.js','arrange.js','guides.js'])vm.runInContext(fs.readFileSync(path.join(root,name),'utf8'),context);
+for(const name of ['art.js','model.js','arrange.js','guides.js','runtime.js'])vm.runInContext(fs.readFileSync(path.join(root,name),'utf8'),context);
 const plain=value=>JSON.parse(JSON.stringify(value));
 const run=source=>plain(vm.runInContext(source,context));
 const frame={box:[0,0,960,600],canvas:true,name:'Screen 1'};
@@ -67,7 +67,7 @@ test('device-sized and custom windows share exact editable bounds with layer coo
 
 test('neighboring edges and corners meet across gaps and slight overlaps',()=>{
  context.adjacent=[frame,{box:[240,120,100,80],name:'Neighbor'}];
- for(const [left,top,x,y] of [[346,127,340,120],[334,115,340,120],[174,196,180,200],[346,207,340,200],[343,135,340,135]]){
+ for(const [left,top,x,y] of [[343,127,340,120],[334,115,340,120],[178,198,180,200],[342,202,340,200],[343,135,340,135]]){
    const edges=run('guidedBounds([0,0,60,50],'+left+','+top+',null,adjacent,5).edges');
    assert.deepEqual(edges,[x,y,x+60,y+50]);
  }
@@ -76,4 +76,18 @@ test('shared horizontal coordinates stay joined when a device scales two adjacen
  const result=run(`(()=>{const p=intro(),pg=makePage('Test'),a=node('Shape','Left',[1,10,52,80]),b=node('Shape','Right',[53,10,83,80]);
  return Object.keys(devices).map(d=>{const [x,,w]=boxFor(a,d,p,pg);return boxFor(b,d,p,pg)[0]-(x+w)})})()`);
  assert.deepEqual(result,[0,0,0]);
+});
+
+test('a deliberate 1 or 2 mm gap remains while a near touch or slight overshoot snaps',()=>{
+ context.sideTargets=[frame,{box:[95,180,360,80],name:'Wide rectangle'}];
+ for(const [x,expected] of [[463,463],[459,459],[457,455],[454,455],[455,455]]){
+   assert.deepEqual(run('guidedBounds([0,100,85,360],'+x+',0,null,sideTargets,5).edges'),[expected,100,expected+85,360]);
+ }
+});
+
+test('border treatment covers just the touching segment, including a single corner',()=>{
+ const segments=(x,y)=>run('rectangleContacts([{id:"wide",fill:"green",box:[95,180,360,80]},{id:"tall",fill:"blue",box:['+x+','+y+',85,260]}]).get("tall")||[]');
+ assert.deepEqual(segments(455,100),[[0,0,80,160,'green']]);
+ assert.deepEqual(segments(456,100),[]);
+ assert.deepEqual(segments(455,260),[[0,0,0,0,'green'],[1,0,0,0,'green']]);
 });

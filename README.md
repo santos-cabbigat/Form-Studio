@@ -63,7 +63,7 @@ In **Palette → Create palette**, give colors a **Used for** purpose or leave t
 
 Click **Multi-select**, then drag from any point on the canvas to draw a selection box. Every layer the box touches is selected, including partial overlaps and layers that contain the box. A click still toggles selection. Shift adds touched layers. Hidden and locked layers are excluded. Choose **Select** to move the selected layers together.
 
-After installing this release, **Settings → Updates** shows **Release: canvas-preview5**. Use **Check for updates**, then **Update now** when the download is ready.
+After installing this release, **Settings → Updates** shows **Release: shape-joins6**. Use **Check for updates**, then **Update now** when the download is ready.
 
 Run the focused checks with `node --test tests/*.test.cjs`.
 

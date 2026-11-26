@@ -72,6 +72,7 @@ function drawBoard(){
    if(!entry){const wrap=document.createElement('div');wrap.className='nodeWrap';wrap.dataset.id=n.id;entry={wrap};canvasLayers.set(n.id,entry)}
    const wrap=entry.wrap;
    if(entry.signature!==signature||entry.src!==n.src||entry.html!==n.html||entry.rows!==n.rows||entry.choices!==n.choices){
+     if(wrap.dataset.joinKey){wrap.querySelectorAll('.joinBacking').forEach(patch=>patch.remove());delete wrap.dataset.joinKey}
      const el=makeEl(n,b,true);
      if(wrap.firstElementChild)wrap.firstElementChild.replaceWith(el);else wrap.prepend(el);
      Object.assign(entry,{signature,src:n.src,html:n.html,rows:n.rows,choices:n.choices});
@@ -82,6 +83,7 @@ function drawBoard(){
    next=wrap.nextElementSibling;
  }
  for(const [id,entry] of canvasLayers)if(!visible.has(id)){entry.wrap.remove();canvasLayers.delete(id)}
+ paintRectangleContacts(s,pg,device,project);
  const sizeButton=$('#sizeBtn');
  sizeButton.textContent=(pg.kind==='window'?'Window':cap(device))+' · '+w+' × '+h+' px';
  sizeButton.title='Editable canvas size · Open device settings';
@@ -521,6 +523,7 @@ stage.addEventListener('pointermove',e=>{if(!gesture)return;const g=gesture;if(g
    setBox(i.n,next,device,project,page());const box=boxFor(i.n,device,project,page());actual.push(box);
    const el=canvasLayers.get(i.n.id)?.wrap;if(el)position(el,box);
  }
+ if(g.items.some(i=>i.n.type==='Shape'))paintRectangleContacts($('#sheet'),page(),device,project);
  const rect=enclosingBox(actual);
  if(assist)drawGuides(rect,matches,g.handle,g.targets);else clearGuides();
  drawGapLabels(rect,g.targets[0].box);

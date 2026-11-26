@@ -274,9 +274,40 @@ const nightColors = [
   ['Carbon Studio','#171a1d','#23282e','#c3d4e3','#f3f5f7','#687482','#323b44'],
   ['Violet Archive','#1e1928','#30263e','#d8b6fa','#f8f0ff','#806694','#41334f']
 ];
+// Keep the supplied swatch order, including colors available for optional accents.
+const customPaletteThemes = [
+  {
+    ...lightPresets[8],name:'1 · Teal & Copper',night:true,
+    description:'Dark teal surfaces, warm ivory text, and a copper primary action.',
+    palette:['#0A0F14','#0F3D3E','#2E6F73','#7FB3B8','#EADCC8','#C6601F'],
+    colors:{canvas:'#0A0F14',surface:'#0F3D3E',action:'#C6601F',onAction:'#0A0F14',accent:'#7FB3B8',heading:'#EADCC8',ink:'#EADCC8',line:'#2E6F73',tint:'#0F3D3E'},
+    radius:8,panel:12,design:'flat',font:'sans'
+  },
+  {
+    ...lightPresets[1],name:'2 · Navy & Amber',night:true,
+    description:'Layered navy, cyan details, warm text, and an amber primary action.',
+    palette:['#0B132B','#1C2541','#3A506B','#5BC0DE','#F4D6B0','#D97706'],
+    colors:{canvas:'#0B132B',surface:'#1C2541',action:'#D97706',onAction:'#0B132B',accent:'#5BC0DE',heading:'#F4D6B0',ink:'#F4D6B0',line:'#3A506B',tint:'#3A506B'},
+    radius:6,panel:10,design:'flat',font:'sans'
+  },
+  {
+    ...lightPresets[5],name:'3 · Deep Sea & Gold',night:true,
+    description:'Deep sea blues with a warm gold primary action and pale readable text.',
+    palette:['#08141A','#092830','#0E6B74','#68A2BD','#1B3D4F','#F4B544','#EAF3F4'],
+    colors:{canvas:'#08141A',surface:'#092830',action:'#F4B544',onAction:'#08141A',accent:'#68A2BD',heading:'#EAF3F4',ink:'#EAF3F4',line:'#0E6B74',tint:'#1B3D4F'},
+    radius:8,panel:12,design:'flat',font:'sans'
+  },
+  {
+    ...lightPresets[6],name:'4 · Ivory & Sage',
+    description:'Warm ivory, teal primary buttons, terracotta accents, and optional gold and sage swatches.',
+    palette:['#F2E9D8','#59718A','#2F6F6D','#E07A47','#D4A72C','#8FA68F'],
+    colors:{canvas:'#F2E9D8',surface:'#F2E9D8',action:'#2F6F6D',onAction:'#F2E9D8',accent:'#E07A47',heading:'#2F6F6D',ink:'#2F6F6D',line:'#59718A',tint:'#F2E9D8'},
+    radius:8,panel:12,design:'flat',font:'sans'
+  }
+];
 const projectPresets = [...lightPresets,...nightColors.map(([name,canvas,surface,action,ink,line,tint],i)=>({
   ...lightPresets[i],name,colors:{canvas,surface,action,ink,line,tint,accent:action},night:true
-}))];
+})),...customPaletteThemes];
 function styleLayerForTheme(n,t){
   applyLayerTheme(n,completeTheme(t));
 }

@@ -2,7 +2,7 @@
 
 const themeColorRoles={canvas:'Page background',surface:'Panels & input backgrounds',action:'Button background',onAction:'Button text',accent:'Icons & accent details',heading:'Headings',ink:'Body text & field text',line:'Borders',tint:'Table headers & decorative shapes'};
 const themeRoleHelp={canvas:'Background of every screen and window.',surface:'Cards, panels, input fields, and table bodies.',action:'Filled buttons; also outlines on secondary buttons.',onAction:'Text inside filled buttons.',accent:'Icons and layers you assign to Accent.',heading:'Large text headings and table header text.',ink:'Paragraphs, labels, input values, and table body text.',line:'Panel, input, and table borders.',tint:'Table header backgrounds and decorative shapes.'};
-const palettePresets=[{name:'Studio violet',colors:defaultColors},{name:'Coastal green',colors:['#207C72','#123D41','#B9E4D7','#E9F4EF','#FFFFFF']},{name:'Warm clay',colors:['#BB664A','#63382F','#F1CEAA','#F7EDDF','#FFFFFF']}];
+const palettePresets=[{name:'Studio violet',colors:defaultColors},{name:'Coastal green',colors:['#207C72','#123D41','#B9E4D7','#E9F4EF','#FFFFFF']},{name:'Warm clay',colors:['#BB664A','#63382F','#F1CEAA','#F7EDDF','#FFFFFF']},...customPaletteThemes.map(t=>({name:t.name,colors:[...t.palette],roles:clone(t.colors)}))];
 const isHexColor=v=>typeof v==='string'&&/^#[a-f0-9]{6}$/i.test(v);
 const layerRoleProperties=['fill','color','border','headerFill','headerText'];
 function validColorRoles(roles){return !!roles&&typeof roles==='object'&&!Array.isArray(roles)&&Object.entries(roles).every(([key,value])=>layerRoleProperties.includes(key)&&[...Object.keys(themeColorRoles),'keep'].includes(value))}
@@ -13,6 +13,7 @@ function validTheme(t){
  ['heading','onAction'].every(k=>t.colors[k]===undefined||isHexColor(t.colors[k]))&&
  ['flat','rail','raised','double'].includes(t.design)&&['serif','sans'].includes(t.font)&&
  (!t.fontFamily||families.includes(t.fontFamily))&&(!t.headingFont||families.includes(t.headingFont))&&
+ (t.palette===undefined||Array.isArray(t.palette)&&t.palette.length<=32&&t.palette.every(isHexColor))&&
  Object.entries({height:[24,80],radius:[0,100],panel:[0,100],body:[8,48]}).every(([k,[min,max]])=>Number.isFinite(t[k])&&t[k]>=min&&t[k]<=max);
 }
 function completeTheme(t){
@@ -50,7 +51,7 @@ function applyLayerTheme(n,t){
 function applyThemeToProject(p,theme,assignments=new Map()){
  const t=completeTheme(theme),c=t.colors;
  p.theme={...p.theme,preset:t.name,definition:clone(t),accent:c.action,background:c.canvas,surface:c.surface,ink:c.ink,tint:c.tint,line:c.line,tabRadius:t.tabs==='pills'?30:t.radius,font:t.fontFamily};
- p.palette=[...new Set(Object.values(c).map(v=>v.toUpperCase()))];p.paletteRoles=clone(c);
+ p.palette=[...new Set([...(t.palette||[]),...Object.values(c)].map(v=>v.toUpperCase()))];p.paletteRoles=clone(c);
  for(const pg of p.pages){delete pg.backgrounds;for(const n of pg.nodes){if(assignments.has(n.id))n.colorRoles=clone(assignments.get(n.id));applyLayerTheme(n,t)}}
 }
 function colorEditor(role,label,value){
@@ -59,7 +60,7 @@ function colorEditor(role,label,value){
 function palettePanel(){
  const saved=(project.customPalettes||[]).map(p=>'<div class="savedDesign"><button data-use-palette="'+esc(p.id)+'"><span class="miniSwatches">'+p.colors.slice(0,8).map(c=>'<i style="background:'+esc(c)+'"></i>').join('')+'</span>'+esc(p.name)+'</button><button data-edit-palette="'+esc(p.id)+'" aria-label="Edit '+esc(p.name)+'">Edit</button></div>').join('');
  const roleRows=Object.entries(project.paletteRoles||{}).map(([role,c])=>'<button class="paletteRoleSwatch" data-role-color="'+esc(role)+'" title="Preview '+esc(themeColorRoles[role])+' on your form"><i style="background:'+esc(c)+'"></i><span>'+esc(themeColorRoles[role])+'<small>'+esc(c)+'</small></span></button>').join('');
- return '<div class="panel"><h2>Color palette</h2>'+field('Apply a color to','<select id="swatchTarget">'+options([['fill','Selected layers · background / fill'],['color','Selected layers · text / icon'],['border','Selected layers · border'],['canvas','Current screen · background']],'fill')+'</select>')+'<p>Named colors preview their role on your form. Free swatches use the target above.</p>'+roleRows+'<div class="swatches">'+project.palette.map(c=>'<button class="swatch" data-swatch="'+esc(c)+'" style="background:'+esc(c)+'" aria-label="Apply '+esc(c)+'"></button>').join('')+'</div>'+btn('create-palette','Create palette','plus','btn full')+btn('edit-palette','Edit & label current colors','','btn full mt')+btn('palette-theme','Preview these roles as a theme','preview','btn full mt')+field('Add a custom color','<input type="color" id="newColor" value="#a28bc2">')+colorPickButton('palette','palette color')+btn('add-color','Add color','plus','btn')+'<h3 class="mt">My palettes</h3>'+(saved||'<p class="hint">Save a named palette to reuse it here.</p>')+'<h3 class="mt">Palette presets</h3>'+palettePresets.map((p,i)=>'<button class="variant" data-palette="'+i+'">'+esc(p.name)+'</button>').join('')+'</div>';
+ return '<div class="panel"><h2>Color palette</h2>'+field('Apply a color to','<select id="swatchTarget">'+options([['fill','Selected layers · background / fill'],['color','Selected layers · text / icon'],['border','Selected layers · border'],['canvas','Current screen · background']],'fill')+'</select>')+'<p>Named colors preview their role on your form. Free swatches use the target above.</p>'+roleRows+'<div class="swatches">'+project.palette.map(c=>'<button class="swatch" data-swatch="'+esc(c)+'" style="background:'+esc(c)+'" aria-label="Apply '+esc(c)+'"></button>').join('')+'</div>'+btn('create-palette','Create palette','plus','btn full')+btn('edit-palette','Edit & label current colors','','btn full mt')+btn('palette-theme','Preview these roles as a theme','preview','btn full mt')+field('Add a custom color','<input type="color" id="newColor" value="#a28bc2">')+colorPickButton('palette','palette color')+btn('add-color','Add color','plus','btn')+'<h3 class="mt">My palettes</h3>'+(saved||'<p class="hint">Save a named palette to reuse it here.</p>')+'<h3 class="mt">Palette presets</h3>'+palettePresets.map((p,i)=>'<button class="variant palettePreset" data-palette="'+i+'"><span class="miniSwatches">'+p.colors.map(c=>'<i style="background:'+esc(c)+'"></i>').join('')+'</span>'+esc(p.name)+'</button>').join('')+'</div>';
 }
 function applyPaletteSwatch(color){
  const target=$('#swatchTarget')?.value||'fill';
@@ -128,11 +129,11 @@ function openProjectThemes(initial=null,highlightRole=null){
  $('#copyTheme').onclick=()=>{draft.name=(draft.name+' copy').slice(0,100);delete draft.id;savedId=null;choice='custom';fill();$('#themeName').focus()};
  $('#saveTheme').onclick=()=>{if(!validTheme(draft))return;savedId||=uid();draft.id=savedId;choice=savedId;change(()=>{project.customThemes||=[];const i=project.customThemes.findIndex(t=>t.id===savedId);if(i<0)project.customThemes.push(clone(draft));else project.customThemes[i]=clone(draft)});choices();$('#themeSaveStatus').textContent=storageOK?'Theme saved. Apply Theme when ready. Layer assignments apply with the theme.':'Unsaved · download a project copy.'};
  $('#deleteTheme').onclick=()=>{change(()=>project.customThemes=project.customThemes.filter(t=>t.id!==savedId));savedId=null;delete draft.id;choice='custom';choices();$('#themeSaveStatus').textContent='Saved theme removed.'};
- $('#themePalette').onclick=()=>{const name=(draft.name+' colors').slice(0,100),roles=clone(draft.colors),colors=[...new Set(Object.values(roles).map(c=>c.toUpperCase()))];change(()=>{project.customPalettes||=[];const p=project.customPalettes.find(p=>p.name===name);if(p)Object.assign(p,{colors,roles});else project.customPalettes.push({id:uid(),name,colors,roles})});$('#themeSaveStatus').textContent=storageOK?'Named colors saved in My palettes.':'Unsaved · download a project copy.'};
+ $('#themePalette').onclick=()=>{const name=(draft.name+' colors').slice(0,100),roles=clone(draft.colors),colors=[...new Set([...(draft.palette||[]),...Object.values(roles)].map(c=>c.toUpperCase()))];change(()=>{project.customPalettes||=[];const p=project.customPalettes.find(p=>p.name===name);if(p)Object.assign(p,{colors,roles});else project.customPalettes.push({id:uid(),name,colors,roles})});$('#themeSaveStatus').textContent=storageOK?'Named colors saved in My palettes.':'Unsaved · download a project copy.'};
  $('#applyTheme').onclick=()=>{if(!validTheme(draft))return;if(choice==='current'&&!mappingDirty){dismiss();return}change(()=>applyThemeToProject(project,draft,assignments),'Applied '+draft.name);dismiss()};
  fill();
 }
-function previewPaletteTheme(role=null){const t=currentTheme();Object.assign(t.colors,project.paletteRoles||{});t.name='My palette theme';delete t.id;openProjectThemes(t,role)}
+function previewPaletteTheme(role=null){const preset=customPaletteThemes.find(t=>t.palette.length===project.palette.length&&t.palette.every((c,i)=>c.toUpperCase()===project.palette[i].toUpperCase())&&Object.entries(t.colors).every(([k,c])=>c.toUpperCase()===(project.paletteRoles?.[k]||'').toUpperCase()));const t=preset?completeTheme(preset):currentTheme();t.palette=[...project.palette];Object.assign(t.colors,project.paletteRoles||{});t.name=preset?.name||'My palette theme';delete t.id;openProjectThemes(t,role)}
 function openPaletteEditor(existing){
  const source=existing||{name:'My palette',colors:[...project.palette],roles:project.paletteRoles||{}};
  const draft={id:source.id,name:source.name,entries:[...Object.entries(source.roles||{}).map(([role,color])=>({role,color})),...source.colors.filter(c=>!Object.values(source.roles||{}).some(v=>v.toUpperCase()===c.toUpperCase())).map(color=>({role:'',color}))]};

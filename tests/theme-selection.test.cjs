@@ -31,9 +31,9 @@ test('box selection handles both drag directions, partial overlap, and additive 
  assert.deepEqual(plain(run("enclosedLayerIds(boxes,[0,0],[35,35],['two'])")),['two','one']);
 });
 test('new dependency and release identity are included in both entry pages',()=>{
- for(const file of ['index.html','account.html']){const html=fs.readFileSync(path.join(root,file),'utf8');assert.match(html,/theme-studio\.js\?v=theme-roles1/);assert.match(html,/studio\.js\?v=theme-roles1/)}
- assert.match(fs.readFileSync(path.join(root,'sw.js'),'utf8'),/SHELL_VERSION = 'theme-roles1'/);
- assert.match(fs.readFileSync(path.join(root,'website-settings.js'),'utf8'),/STUDIO_RELEASE='theme-roles1'/);
+ for(const file of ['index.html','account.html']){const html=fs.readFileSync(path.join(root,file),'utf8');assert.match(html,/theme-studio\.js\?v=color-palettes2/);assert.match(html,/studio\.js\?v=color-palettes2/)}
+ assert.match(fs.readFileSync(path.join(root,'sw.js'),'utf8'),/SHELL_VERSION = 'color-palettes2'/);
+ assert.match(fs.readFileSync(path.join(root,'website-settings.js'),'utf8'),/STUDIO_RELEASE='color-palettes2'/);
 });
 
 test('offline installer caches the new theme editor and every referenced file',()=>{
@@ -41,6 +41,21 @@ test('offline installer caches the new theme editor and every referenced file',(
  vm.runInContext(fs.readFileSync(path.join(root,'sw.js'),'utf8'),worker);
  worker.html=fs.readFileSync(path.join(root,'index.html'),'utf8');
  const assets=plain(vm.runInContext('shellAssets(html)',worker));
- assert.ok(assets.some(url=>url.endsWith('/theme-studio.js?v=theme-roles1')));
+ assert.ok(assets.some(url=>url.endsWith('/theme-studio.js?v=color-palettes2')));
  for(const url of assets)assert.ok(fs.existsSync(path.join(root,new URL(url).pathname.replace('/Form-Studio/',''))),url);
+});
+
+test('the four supplied palettes retain every exact color and order',()=>{
+ const expected=[['#0A0F14','#0F3D3E','#2E6F73','#7FB3B8','#EADCC8','#C6601F'],['#0B132B','#1C2541','#3A506B','#5BC0DE','#F4D6B0','#D97706'],['#08141A','#092830','#0E6B74','#68A2BD','#1B3D4F'],['#F2E9D8','#59718A','#2F6F6D','#E07A47','#D4A72C','#8FA68F']];
+ const themes=plain(run('customPaletteThemes'));
+ assert.equal(themes.length,4);
+ themes.forEach((theme,i)=>assert.deepEqual(theme.palette.slice(0,expected[i].length),expected[i]));
+ for(const name of themes.map(t=>t.name))assert.equal(run(`projectPresets.some(t=>t.name===${JSON.stringify(name)})&&palettePresets.some(t=>t.name===${JSON.stringify(name)}&&validPaletteRoles(t.roles))`),true);
+ assert.equal(themes[2].colors.action,'#F4B544');
+});
+test('supplied themes preserve optional swatches after applying and have readable primary buttons',()=>{
+ const result=plain(run('customPaletteThemes.map(t=>{const p=intro();applyThemeToProject(p,t);return {palette:t.palette,saved:p.palette,action:t.colors.action,onAction:t.colors.onAction,ink:t.colors.ink,surface:t.colors.surface}})'));
+ function luminance(hex){const values=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return values.reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0)}
+ function ratio(a,b){const values=[luminance(a),luminance(b)].sort((a,b)=>b-a);return (values[0]+.05)/(values[1]+.05)}
+ for(const t of result){assert.deepEqual(t.saved.slice(0,t.palette.length),t.palette);assert.ok(ratio(t.action,t.onAction)>=4.5);assert.ok(ratio(t.ink,t.surface)>=4.5)}
 });

@@ -186,3 +186,5 @@ main>.library{grid-row:1;grid-column:1}
 @media(max-width:760px){.dialog.themeBrowser{padding:12px}.themeBrowser .themeStudio{grid-template-columns:minmax(0,1fr)}}
 
 .compactThemePicker{display:none}@media(max-width:760px){.themeBrowser .themeChoices{display:none}.compactThemePicker{display:flex;margin-top:8px}.themeSettings h3{margin-top:10px}}
+
+.palettePreset{display:flex;flex-direction:column;align-items:stretch;text-align:left;gap:6px}.palettePreset .miniSwatches{height:12px;width:100%;margin:0}

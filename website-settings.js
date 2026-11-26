@@ -1,5 +1,5 @@
 'use strict';
-const STUDIO_RELEASE='theme-roles1';
+const STUDIO_RELEASE='color-palettes2';
 
 function activateStudioUpdate(worker){
  const sw=navigator.serviceWorker;

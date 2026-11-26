@@ -428,7 +428,7 @@ document.addEventListener('click',e=>{
  if(b.dataset.edittemplate)manageTemplate(project.templates.find(t=>t.id===b.dataset.edittemplate));
  if(b.dataset.swatch)applyPaletteSwatch(b.dataset.swatch);
  if(b.dataset.roleColor)previewPaletteTheme(b.dataset.roleColor);
- if(b.dataset.palette!==undefined)change(()=>{project.palette=[...palettePresets[+b.dataset.palette].colors];delete project.paletteRoles},'Palette changed');
+ if(b.dataset.palette!==undefined)change(()=>{const p=palettePresets[+b.dataset.palette];project.palette=[...p.colors];if(p.roles)project.paletteRoles=clone(p.roles);else delete project.paletteRoles},'Palette changed');
  if(b.dataset.usePalette){const p=project.customPalettes?.find(p=>p.id===b.dataset.usePalette);if(p)change(()=>{project.palette=[...p.colors];project.paletteRoles=clone(p.roles||{})},'Palette selected')}
  if(b.dataset.editPalette){const p=project.customPalettes?.find(p=>p.id===b.dataset.editPalette);if(p)openPaletteEditor(p)}
  if(b.dataset.openTheme){const t=project.customThemes?.find(t=>t.id===b.dataset.openTheme);if(t)openProjectThemes(t)}

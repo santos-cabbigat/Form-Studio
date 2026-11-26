@@ -61,11 +61,16 @@ Each color is labeled by purpose: page background, panel and input backgrounds, 
 
 In **Palette → Create palette**, give colors a **Used for** purpose or leave them as free swatches. Named colors open a theme preview for that role. Free swatches use the explicit **Apply a color to** target: selected backgrounds, text, borders, or the current screen background. Saved themes, palettes and layer assignments travel with the editable project and its cloud copy.
 
-Drag from an empty canvas area to select layers fully inside a box. With **Box select** enabled, start the drag on a layer too; a click still toggles selection. Shift adds enclosed layers. Hidden and locked layers are excluded. Choose **Select** to move the selected layers together.
+Click **Multi-select**, then drag from any point on the canvas to draw a selection box. Every layer the box touches is selected, including partial overlaps and layers that contain the box. A click still toggles selection. Shift adds touched layers. Hidden and locked layers are excluded. Choose **Select** to move the selected layers together.
 
-After installing this release, **Settings → Updates** shows **Release: color-palettes2**. Use **Check for updates**, then **Update now** when the download is ready.
+After installing this release, **Settings → Updates** shows **Release: drag-guides3**. Use **Check for updates**, then **Update now** when the download is ready.
 
-Run the focused checks with `node --test tests/theme-selection.test.cjs`.
+Run the focused checks with `node --test tests/*.test.cjs`.
 
 
 Four supplied color sets are available in both **Palette presets** and **Themes**: **1 · Teal & Copper**, **2 · Navy & Amber**, **3 · Deep Sea & Gold**, and **4 · Ivory & Sage**. The third set adds gold `#F4B544` for the primary action and pale `#EAF3F4` for readable text. All supplied colors remain available as swatches, including the fourth set’s optional gold and sage accents.
+
+
+While dragging with **Guides on**, blue lines and explicit labels identify horizontal and vertical page centering. Magenta guides show alignment with nearby layers. The existing left, right, top and bottom measurements remain visible. Hold Alt to move without snapping.
+
+Open **Settings → Device canvas sizes** to set the project-wide laptop, tablet and phone viewport widths and heights. Defaults are 960 × 600, 768 × 760 and 390 × 760 px. The editor uses the same device scale across screens; longer forms scroll without changing that scale. Popup windows appear within the same device frame and retain their own dimensions. The footer size button opens these settings.

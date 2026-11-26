@@ -1,5 +1,5 @@
 'use strict';
-const STUDIO_RELEASE='color-palettes2';
+const STUDIO_RELEASE='drag-guides3';
 
 function activateStudioUpdate(worker){
  const sw=navigator.serviceWorker;
@@ -93,7 +93,28 @@ function bindStudioUpdates(dialog){
  sw.getRegistration(scope).then(watch).catch(()=>{});
 }
 
-function openStudioSettings(){
+function deviceSettingsMarkup(){
+ return '<section id="deviceSizeSettings"><h3>Device canvas sizes</h3><p>Use the same device size across this project’s screens and previews. Longer content scrolls. Popup windows appear inside the same device frame.</p><form id="deviceSizeForm"><div class="deviceSizeGrid"><b>Device</b><b>Width (px)</b><b>Height (px)</b>'+Object.keys(devices).map(d=>'<label for="deviceWidth-'+d+'">'+esc(cap(d))+'</label><select id="deviceWidth-'+d+'" data-device-width="'+d+'" aria-label="'+cap(d)+' width">'+options(sizes[d].map(v=>[String(v),String(v)]),String(project.widths[d]))+'</select><input type="number" data-device-height="'+d+'" aria-label="'+cap(d)+' height" required min="240" max="4000" step="1" value="'+deviceViewport(project,d)[1]+'">').join('')+'</div><div class="row"><button class="btn" type="button" id="resetDeviceSizes">Reset to defaults</button><button class="btn primary" type="submit">Apply sizes</button></div><p id="deviceSizeResult" role="status"></p></form></section>';
+}
+
+function bindDeviceSettings(dialog){
+ const form=dialog.querySelector('#deviceSizeForm'),note=dialog.querySelector('#deviceSizeResult');
+ dialog.querySelector('#resetDeviceSizes').onclick=()=>{
+  for(const input of form.querySelectorAll('[data-device-width]'))input.value=devices[input.dataset.deviceWidth][0];
+  for(const input of form.querySelectorAll('[data-device-height]'))input.value=devices[input.dataset.deviceHeight][1];
+  note.textContent='Default sizes loaded. Choose Apply sizes to save.';
+ };
+ form.onsubmit=e=>{
+  e.preventDefault();if(!form.reportValidity())return;
+  const widths=Object.fromEntries([...form.querySelectorAll('[data-device-width]')].map(input=>[input.dataset.deviceWidth,Number(input.value)]));
+  const heights=Object.fromEntries([...form.querySelectorAll('[data-device-height]')].map(input=>[input.dataset.deviceHeight,Number(input.value)]));
+  if(!validViewportHeights(heights))return;
+  change(()=>{project.widths=widths;project.viewportHeights=heights},'Device sizes saved');
+  note.textContent=storageOK?'Device sizes saved for every screen in this project.':'The sizes could not be saved. Download a project copy.';
+ };
+}
+
+function openStudioSettings(section=''){
  if(document.getElementById('studioSettings'))return;
  const dialog=document.createElement('dialog');
  dialog.id='studioSettings';
@@ -113,6 +134,7 @@ function openStudioSettings(){
     <div class="settingRow"><div><strong>Projects on this device</strong><p id="install"></p></div><b id="stored"></b></div>
     <div class="settingRow"><div><strong>Cloud connection</strong><p id="network"></p></div><button class="btn" id="checkCloud">Check connection</button></div><p id="cloudResult" role="status"></p>
    </section>
+   ${deviceSettingsMarkup()}
    <section><h3>Updates</h3><div class="settingRow"><div><strong>Studio editor</strong><p>Release: ${STUDIO_RELEASE}</p></div><button class="btn" id="checkUpdate">Check for updates</button></div><p id="updateResult" role="status"></p></section>
   </div>`;
  document.body.append(dialog);
@@ -149,6 +171,8 @@ function openStudioSettings(){
    el('install').textContent=reg?.active?'Offline editor installed.':'Offline editor installation is pending.';
  }
  bindStudioUpdates(dialog);
+ bindDeviceSettings(dialog);
  dialog.showModal();
+ if(section==='devices')dialog.querySelector('#deviceSizeSettings').scrollIntoView({block:'center'});
  inspectInstall().catch(()=>{el('install').textContent='Offline installation status unavailable.'});
 }

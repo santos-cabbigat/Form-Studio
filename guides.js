@@ -6,6 +6,8 @@ function syncGuideButton() {
   const control = $('#guideTool');
   control.setAttribute('aria-pressed', String(smartGuides));
   control.classList.toggle('on', smartGuides);
+  control.textContent=smartGuides?'Guides on':'Guides off';
+  control.title='Live guides for page centers and nearby layers. Hold Alt while dragging to move without snapping.';
 }
 function toggleSmartGuides() {
   smartGuides = !smartGuides;
@@ -13,7 +15,40 @@ function toggleSmartGuides() {
   syncGuideButton();
   clearGuides();
 }
-function clearGuides() { $('#sheet .snapOverlay')?.remove(); }
+function clearGuides() { $('#sheet .snapOverlay')?.remove();$('#dragAlignmentStatus')?.remove(); }
+
+function pageCenterAlignment(rect,frame,epsilon=.51) {
+  const x=frame[0]+frame[2]/2,y=frame[1]+frame[3]/2;
+  return {horizontal:Math.abs(rect[0]+rect[2]/2-x)<=epsilon,
+    vertical:Math.abs(rect[1]+rect[3]/2-y)<=epsilon,x,y};
+}
+
+function describeAlignment(match) {
+  if(!match||match.equalSize)return '';
+  if(match.pair)return 'Equal gaps · '+Number(match.pair.span.toFixed(1))+' px';
+  if(match.from==='center'&&match.to==='center'){
+    if(match.target.canvas)return match.axis===0?'Centered horizontally on page':'Centered vertically on page';
+    return (match.axis===0?'Horizontal centers aligned':'Vertical centers aligned')+' · '+match.target.name;
+  }
+  const names=match.axis===0?{start:'Left',end:'Right',center:'Center'}:{start:'Top',end:'Bottom',center:'Middle'};
+  const relation=match.from===match.to?names[match.from]+' edges aligned':names[match.from]+' to '+names[match.to].toLowerCase();
+  return relation+' · '+(match.target.canvas?'Page':match.target.name);
+}
+
+function alignmentStatus(center,labels) {
+  const parts=[];
+  if(center.horizontal)parts.push('Centered horizontally on page');
+  if(center.vertical)parts.push('Centered vertically on page');
+  return [...new Set([...parts,...labels])].join(' · ');
+}
+
+function updateAlignmentStatus(text,center) {
+  let status=$('#dragAlignmentStatus');
+  if(!text){if(status)status.hidden=true;return}
+  if(!status){status=document.createElement('div');status.id='dragAlignmentStatus';status.setAttribute('role','status');status.setAttribute('aria-live','polite');$('#stage').append(status)}
+  status.hidden=false;status.classList.toggle('atPageCenter',center.horizontal||center.vertical);
+  if(status.textContent!==text)status.textContent=text;
+}
 
 function guideTargets(pg, chosen) {
   const canvas = bounds(pg,device,project);
@@ -47,7 +82,8 @@ function matchGuide(axis, rect, handle, targets, tolerance) {
     // At similar distances prefer matching edges and centres on nearby objects.
     const rank=pair?0:equalSize?3:from==='center'&&to==='center'?0:from===to?0.4:
       from!=='center'&&to!=='center'?0.6:1.5;
-    const score=gap/tolerance+rank*.14+Math.min(crossGap(target)/Math.max(tolerance,1),60)*.002+(target.canvas ? .18 : 0);
+    const canvasPriority=target.canvas?(from==='center'&&to==='center'?-.08:.18):0;
+    const score=gap/tolerance+rank*.14+Math.min(crossGap(target)/Math.max(tolerance,1),60)*.002+canvasPriority;
     if(!best||score<best.score)best={axis,delta,target,line,from,to,equalSize,pair,score};
   }
   function checkLine(line,target,to){
@@ -99,41 +135,40 @@ function guidedBounds(before, dx, dy, handle, targets, tolerance) {
 }
 
 function drawGuides(rect, matches, handle, targets) {
-  clearGuides();
+  $('#sheet .snapOverlay')?.remove();
   const overlay=document.createElement('div');
   overlay.className='snapOverlay';overlay.setAttribute('aria-hidden','true');
   const zoom=Math.max(scale,0.1);
   overlay.style.setProperty('--guide-stroke',(1.5/zoom)+'px');
   overlay.style.setProperty('--guide-font',(11/zoom)+'px');
-  function line(vertical, fixed, low, high, sizeMark=false) {
+  function line(vertical, fixed, low, high, sizeMark=false, pageCenter=false) {
     const el=document.createElement('i');
-    el.className='snapLine '+(vertical?'vertical':'horizontal')+(sizeMark?' dimension':'');
+    el.className='snapLine '+(vertical?'vertical':'horizontal')+(sizeMark?' dimension':'')+(pageCenter?' pageCenter':'');
     el.style.left=(vertical?fixed:low)+'px';el.style.top=(vertical?low:fixed)+'px';
     el.style[vertical?'height':'width']=Math.max(1,high-low)+'px';
     overlay.append(el);
   }
   const sizes=[],labels=[];
-  const edgeNames=[{start:'Left',end:'Right',center:'Center'},{start:'Top',end:'Bottom',center:'Middle'}];
+  const frame=targets[0].box,center=pageCenterAlignment(rect,frame);
   function dot(x,y){
     const el=document.createElement('i');el.className='alignmentDot';
     el.style.left=x+'px';el.style.top=y+'px';overlay.append(el);
   }
+  if(center.horizontal)line(true,center.x,frame[1],frame[1]+frame[3],false,true);
+  if(center.vertical)line(false,center.y,frame[0],frame[0]+frame[2],false,true);
+  if(center.horizontal||center.vertical)dot(rect[0]+rect[2]/2,rect[1]+rect[3]/2);
   for(let axis=0;axis<2;axis++) {
     const m=matches[axis],other=1-axis;
     if(m?.pair){
       const {a,b,span}=m.pair,cross=rect[other]+rect[other+2]/2;
       line(axis===1,cross,a,rect[axis],true);line(axis===1,cross,rect[axis]+rect[axis+2],b,true);
-      labels.push('Equal gaps · '+Number(span.toFixed(1))+' px');
+      labels.push(describeAlignment(m));
     }else if(m && !m.equalSize) {
-      line(axis===0,m.line, Math.min(rect[other],m.target.box[other])-6/zoom,
+      if(!(m.target.canvas&&m.from==='center'&&m.to==='center'))line(axis===0,m.line, Math.min(rect[other],m.target.box[other])-6/zoom,
         Math.max(rect[other]+rect[other+2],m.target.box[other]+m.target.box[other+2])+6/zoom);
+      labels.push(describeAlignment(m));
       if(m.from==='center'&&m.to==='center'){
-        labels.push((axis===0?'Centers aligned':'Middles aligned')+' · '+m.target.name);
         const point=r=>[r[0]+r[2]/2,r[1]+r[3]/2];dot(...point(rect));dot(...point(m.target.box));
-      }else{
-        const names=edgeNames[axis];
-        const relation=m.from===m.to?names[m.from]+' edges aligned':names[m.from]+' to '+names[m.to].toLowerCase();
-        labels.push(relation+' · '+m.target.name);
       }
     }
     if(!handle||!(axis===0?/[lr]/:/[tb]/).test(handle)) continue;
@@ -159,9 +194,11 @@ function drawGuides(rect, matches, handle, targets) {
     const y=[rect[1],rect[1]+rect[3]].find(y=>[box[1],box[1]+box[3]].some(v=>Math.abs(y-v)<.51));
     if(x!==undefined&&y!==undefined){dot(x,y);labels.unshift('Corners meet · '+target.name);break}
   }
-  if(labels.length){
+  updateAlignmentStatus(alignmentStatus(center,labels),center);
+  const objectLabels=labels.filter(label=>!label.includes('on page'));
+  if(objectLabels.length){
     const badge=document.createElement('span');badge.className='alignBadge';
-    badge.textContent=labels[0].startsWith('Corners meet')?labels[0]:labels.join('  /  ');
+    badge.textContent=objectLabels[0].startsWith('Corners meet')?objectLabels[0]:objectLabels.join('  /  ');
     badge.style.left=Math.max(0,Math.min(rect[0],targets[0].box[2]-185/zoom))+'px';
     badge.style.top=(rect[1]>24/zoom?rect[1]-23/zoom:rect[1]+rect[3]+5/zoom)+'px';overlay.append(badge);
   }

@@ -166,9 +166,9 @@ function toggleLayers(n,add){
  selectIds(ids.every(id=>selected.includes(id))?selected.filter(id=>!ids.includes(id)):[...selected,...ids])
 }
 
-function enclosedLayerIds(boxes,start,end,add=[],epsilon=0){
+function touchedLayerIds(boxes,start,end,add=[],epsilon=0){
  const l=Math.min(start[0],end[0]),r=Math.max(start[0],end[0]),t=Math.min(start[1],end[1]),b=Math.max(start[1],end[1]);
- return [...new Set([...add,...boxes.filter(({box:[x,y,w,h]})=>x>=l-epsilon&&y>=t-epsilon&&x+w<=r+epsilon&&y+h<=b+epsilon).map(item=>item.id)])];
+ return [...new Set([...add,...boxes.filter(({box:[x,y,w,h]})=>x<=r+epsilon&&y<=b+epsilon&&x+w>=l-epsilon&&y+h>=t-epsilon).map(item=>item.id)])];
 }
 function startBoxSelection(event,hit){
  const marquee=document.createElement('div');marquee.className='selectionMarquee';marquee.hidden=true;stage.append(marquee);
@@ -179,7 +179,7 @@ function updateBoxSelection(event){
  const g=gesture,dx=event.clientX-g.x,dy=event.clientY-g.y;if(Math.abs(dx)+Math.abs(dy)<4&&!g.moved)return;g.moved=true;
  const r=stage.getBoundingClientRect(),s=$('#sheet').getBoundingClientRect();g.marquee.hidden=false;
  Object.assign(g.marquee.style,{left:Math.min(g.x,event.clientX)-r.left+'px',top:Math.min(g.y,event.clientY)-r.top+'px',width:Math.abs(dx)+'px',height:Math.abs(dy)+'px'});
- const ids=enclosedLayerIds(g.boxes,[(g.x-s.left)/scale,(g.y-s.top)/scale],[(event.clientX-s.left)/scale,(event.clientY-s.top)/scale],g.add?g.original:[],.5/scale),next=new Set(ids),previous=new Set(selected);
+ const ids=touchedLayerIds(g.boxes,[(g.x-s.left)/scale,(g.y-s.top)/scale],[(event.clientX-s.left)/scale,(event.clientY-s.top)/scale],g.add?g.original:[],.5/scale),next=new Set(ids),previous=new Set(selected);
  for(const id of previous)if(!next.has(id))markCanvasLayer(id,false);
  for(const id of next)if(!previous.has(id))markCanvasLayer(id,true);selected=ids;
 }

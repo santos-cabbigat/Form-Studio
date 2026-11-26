@@ -311,7 +311,7 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
  draw()
 }
 function runtimeCode(){
- const funcs=[icon,esc,cap,boxFor,bounds,cssProps,tableLines,dropdownChoices,tableMarkup,seedRows,columnKeys,mappedFields,pickerKind,pickerFormatOptions,pickerLabel,pickerMarkup,acceptsPickerValue,pickerController,labelHTML,markup,customDoc,makeEl,runtime];
+ const funcs=[icon,esc,cap,boxFor,deviceViewport,bounds,cssProps,tableLines,dropdownChoices,tableMarkup,seedRows,columnKeys,mappedFields,pickerKind,pickerFormatOptions,pickerLabel,pickerMarkup,acceptsPickerValue,pickerController,labelHTML,markup,customDoc,makeEl,runtime];
  return 'const paths='+JSON.stringify(paths)+';\nconst devices='+JSON.stringify(devices)+';\n'+funcs.map(f=>'const '+f.name+' = '+f.toString()+';').join('\n');
 }
 function runtimeHead(p){

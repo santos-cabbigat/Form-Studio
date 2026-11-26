@@ -26,14 +26,14 @@ test('invalid role definitions and invalid saved designs are rejected',()=>{
 });
 test('box selection handles both drag directions, partial overlap, and additive selection',()=>{
  const boxes=[{id:'one',box:[10,10,20,20]},{id:'two',box:[40,10,20,20]},{id:'partial',box:[55,25,30,30]}];context.boxes=boxes;
- assert.deepEqual(plain(run('enclosedLayerIds(boxes,[0,0],[65,40])')),['one','two']);
- assert.deepEqual(plain(run('enclosedLayerIds(boxes,[65,40],[0,0])')),['one','two']);
- assert.deepEqual(plain(run("enclosedLayerIds(boxes,[0,0],[35,35],['two'])")),['two','one']);
+ assert.deepEqual(plain(run('touchedLayerIds(boxes,[0,0],[65,40])')),['one','two','partial']);
+ assert.deepEqual(plain(run('touchedLayerIds(boxes,[65,40],[0,0])')),['one','two','partial']);
+ assert.deepEqual(plain(run("touchedLayerIds(boxes,[0,0],[35,35],['two'])")),['two','one']);
 });
 test('new dependency and release identity are included in both entry pages',()=>{
- for(const file of ['index.html','account.html']){const html=fs.readFileSync(path.join(root,file),'utf8');assert.match(html,/theme-studio\.js\?v=color-palettes2/);assert.match(html,/studio\.js\?v=color-palettes2/)}
- assert.match(fs.readFileSync(path.join(root,'sw.js'),'utf8'),/SHELL_VERSION = 'color-palettes2'/);
- assert.match(fs.readFileSync(path.join(root,'website-settings.js'),'utf8'),/STUDIO_RELEASE='color-palettes2'/);
+ for(const file of ['index.html','account.html']){const html=fs.readFileSync(path.join(root,file),'utf8');assert.match(html,/theme-studio\.js\?v=drag-guides3/);assert.match(html,/studio\.js\?v=drag-guides3/)}
+ assert.match(fs.readFileSync(path.join(root,'sw.js'),'utf8'),/SHELL_VERSION = 'drag-guides3'/);
+ assert.match(fs.readFileSync(path.join(root,'website-settings.js'),'utf8'),/STUDIO_RELEASE='drag-guides3'/);
 });
 
 test('offline installer caches the new theme editor and every referenced file',()=>{
@@ -41,7 +41,7 @@ test('offline installer caches the new theme editor and every referenced file',(
  vm.runInContext(fs.readFileSync(path.join(root,'sw.js'),'utf8'),worker);
  worker.html=fs.readFileSync(path.join(root,'index.html'),'utf8');
  const assets=plain(vm.runInContext('shellAssets(html)',worker));
- assert.ok(assets.some(url=>url.endsWith('/theme-studio.js?v=color-palettes2')));
+ assert.ok(assets.some(url=>url.endsWith('/theme-studio.js?v=drag-guides3')));
  for(const url of assets)assert.ok(fs.existsSync(path.join(root,new URL(url).pathname.replace('/Form-Studio/',''))),url);
 });
 
@@ -58,4 +58,11 @@ test('supplied themes preserve optional swatches after applying and have readabl
  function luminance(hex){const values=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return values.reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0)}
  function ratio(a,b){const values=[luminance(a),luminance(b)].sort((a,b)=>b-a);return (values[0]+.05)/(values[1]+.05)}
  for(const t of result){assert.deepEqual(t.saved.slice(0,t.palette.length),t.palette);assert.ok(ratio(t.action,t.onAction)>=4.5);assert.ok(ratio(t.ink,t.surface)>=4.5)}
+});
+
+test('multi-select includes partial overlaps, edge touches and a containing layer',()=>{
+ context.touchBoxes=[{id:'panel',box:[0,0,300,300]},{id:'partial',box:[80,80,120,60]},{id:'edge',box:[220,140,40,40]},{id:'outside',box:[400,400,40,40]}];
+ assert.deepEqual(plain(run('touchedLayerIds(touchBoxes,[195,135],[220,150])')),['panel','partial','edge']);
+ assert.deepEqual(plain(run('touchedLayerIds(touchBoxes,[220,150],[195,135])')),['panel','partial','edge']);
+ assert.deepEqual(plain(run('touchedLayerIds(touchBoxes,[100,100],[110,110])')),['panel','partial']);
 });

@@ -15,9 +15,15 @@ function node(type,text,box,props={}) {
  const [w,h]=small[type]||[170,44];
  return {id:uid(),type,name:text||type,text:text||type,boxes:{laptop:box||[32,32,w,h]},style:{fill:type==='Button'?'var(--accent)':type==='Module'?'#F2EDF9':type==='Shape'?'#BE9DEB':'transparent',color:type==='Button'?'#FFFFFF':'#282430',radius:['Button','Input','Module','Shape'].includes(type)?8:0,fontSize:type==='Text'?18:15,weight:type==='Button'?600:400,border:type==='Input'?'1px solid #D9D6DF':'0px solid transparent',align:type==='Button'?'center':'left'},actions:[],...props}
 }
+function deviceViewport(project,device){
+ return [project.widths[device],project.viewportHeights?.[device]??devices[device][1]];
+}
+function validViewportHeights(heights){
+ return !!heights&&typeof heights==='object'&&!Array.isArray(heights)&&Object.keys(devices).every(d=>Number.isInteger(heights[d])&&heights[d]>=240&&heights[d]<=4000)&&Object.keys(heights).every(d=>Object.hasOwn(devices,d));
+}
 function bounds(page,device,project){
  if(page.kind==='window')return [Math.min(page.width,project.widths[device]-24),page.height];
- return [project.widths[device],Math.max(devices[device][1],...page.nodes.map(n=>{const b=boxFor(n,device,project,page);return n.hide?.[device]?0:b[1]+b[3]}))];
+ return [project.widths[device],Math.max(deviceViewport(project,device)[1],...page.nodes.map(n=>{const b=boxFor(n,device,project,page);return n.hide?.[device]?0:b[1]+b[3]}))];
 }
 function boxFor(n,device,p,page){
  const box=n.boxes[device]||n.boxes.laptop;
@@ -44,7 +50,7 @@ function createItem(type,variant){
  return n
 }
 function intro(){
- const p={format:'form-studio',version:1,name:'Workspace UI',widths:{laptop:960,tablet:768,phone:390},theme:{accent:defaultColors[0],font:families[0],background:'#FFFFFF'},palette:[...defaultColors],templates:[],pages:[]};
+ const p={format:'form-studio',version:1,name:'Workspace UI',widths:{laptop:960,tablet:768,phone:390},viewportHeights:{laptop:600,tablet:760,phone:760},theme:{accent:defaultColors[0],font:families[0],background:'#FFFFFF'},palette:[...defaultColors],templates:[],pages:[]};
  const a=makePage('Sign in'), win=makePage('Welcome window','window');p.pages=[a,win];
  function add(type,text,box,phone,style={},extra={}){
  const n=node(type,text,box,extra);Object.assign(n.style,style);n.boxes.phone=phone;n.boxes.tablet=[Math.round(box[0]*.8),box[1]+65,Math.round(box[2]*.8),box[3]];a.nodes.push(n);return n

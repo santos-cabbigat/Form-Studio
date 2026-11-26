@@ -1,0 +1,49 @@
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const vm=require('node:vm');
+const path=require('node:path');
+const root=path.resolve(__dirname,'..');
+const context=vm.createContext({});
+for(const name of ['art.js','model.js','arrange.js','guides.js'])vm.runInContext(fs.readFileSync(path.join(root,name),'utf8'),context);
+const plain=value=>JSON.parse(JSON.stringify(value));
+const run=source=>plain(vm.runInContext(source,context));
+const frame={box:[0,0,960,600],canvas:true,name:'Screen 1'};
+context.targets=[frame];
+
+test('dragging near both page centers snaps to the center and reports both axes',()=>{
+ const result=run('guidedBounds([80,80,200,140],338,188,null,targets,5)');
+ assert.deepEqual(result.edges,[420,270,540,330]);
+ context.rect=[420,270,120,60];
+ assert.deepEqual(run('pageCenterAlignment(rect,targets[0].box)'),{horizontal:true,vertical:true,x:480,y:300});
+ assert.match(run('describeAlignment(guidedBounds([80,80,200,140],338,188,null,targets,5).matches[0])'),/Centered horizontally on page/);
+ assert.match(run('describeAlignment(guidedBounds([80,80,200,140],338,188,null,targets,5).matches[1])'),/Centered vertically on page/);
+});
+test('horizontal and vertical page center indications are independent',()=>{
+ assert.deepEqual(run('pageCenterAlignment([420,80,120,60],targets[0].box)'),{horizontal:true,vertical:false,x:480,y:300});
+ assert.deepEqual(run('pageCenterAlignment([80,270,120,60],targets[0].box)'),{horizontal:false,vertical:true,x:480,y:300});
+ assert.deepEqual(run('pageCenterAlignment([421,80,120,60],targets[0].box)'),{horizontal:false,vertical:false,x:480,y:300});
+});
+test('nearby alignment remains available alongside a page-center guide',()=>{
+ context.neighborTargets=[frame,{box:[640,180,180,60],name:'Reference A'},{box:[640,360,180,100],name:'Reference B'}];
+ const result=run('guidedBounds([80,80,200,140],558,188,null,neighborTargets,5)');
+ assert.deepEqual(result.edges,[640,270,760,330]);
+ assert.match(run('describeAlignment(guidedBounds([80,80,200,140],558,188,null,neighborTargets,5).matches[0])'),/Left edges aligned · Reference/);
+ const center=run('pageCenterAlignment([640,270,120,60],targets[0].box)');
+ assert.equal(center.horizontal,false);assert.equal(center.vertical,true);
+});
+test('Alt-style bypass preserves the manual position',()=>{
+ assert.deepEqual(run('guidedBounds([80,80,200,140],338,188,null,[],5).edges'),[418,268,538,328]);
+});
+test('page centers support offset frames and odd-sized selections',()=>{
+ assert.deepEqual(run('pageCenterAlignment([431,292,99,55],[1,19,960,600])'),{horizontal:true,vertical:true,x:481,y:319});
+});
+test('existing left right top bottom measurements remain correct',()=>{
+ assert.deepEqual(run('windowGaps([20,40,120,60],[0,0,960,600])'),{top:40,bottom:500,left:20,right:820});
+});
+test('legacy projects get stable device defaults and explicit settings apply to every screen',()=>{
+ const result=run(`(()=>{const p=intro();delete p.viewportHeights;const short=makePage('Short'),long=makePage('Long');long.nodes=[node('Text','Long text',[20,1400,200,40])];return {short:deviceViewport(p,'laptop'),long:deviceViewport(p,'laptop'),contentHeight:bounds(long,'laptop',p)[1],tablet:deviceViewport(p,'tablet'),phone:deviceViewport(p,'phone'),valid:validViewportHeights({laptop:800,tablet:1000,phone:900})}})()`);
+ assert.deepEqual(result.short,[960,600]);assert.deepEqual(result.short,result.long);assert.equal(result.contentHeight,1440);assert.deepEqual(result.tablet,[768,760]);assert.deepEqual(result.phone,[390,760]);assert.equal(result.valid,true);
+ assert.equal(run('validViewportHeights({laptop:0,tablet:760,phone:760})'),false);
+ assert.deepEqual(run("deviceViewport({widths:{laptop:1280},viewportHeights:{laptop:800}},'laptop')"),[1280,800]);
+});

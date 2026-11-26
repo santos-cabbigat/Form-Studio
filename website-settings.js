@@ -1,4 +1,5 @@
 'use strict';
+const STUDIO_RELEASE='theme-roles1';
 
 function activateStudioUpdate(worker){
  const sw=navigator.serviceWorker;
@@ -112,7 +113,7 @@ function openStudioSettings(){
     <div class="settingRow"><div><strong>Projects on this device</strong><p id="install"></p></div><b id="stored"></b></div>
     <div class="settingRow"><div><strong>Cloud connection</strong><p id="network"></p></div><button class="btn" id="checkCloud">Check connection</button></div><p id="cloudResult" role="status"></p>
    </section>
-   <section><h3>Updates</h3><div class="settingRow"><strong>Studio editor</strong><button class="btn" id="checkUpdate">Check for updates</button></div><p id="updateResult" role="status"></p></section>
+   <section><h3>Updates</h3><div class="settingRow"><div><strong>Studio editor</strong><p>Release: ${STUDIO_RELEASE}</p></div><button class="btn" id="checkUpdate">Check for updates</button></div><p id="updateResult" role="status"></p></section>
   </div>`;
  document.body.append(dialog);
  const el=id=>dialog.querySelector('#'+id);

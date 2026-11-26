@@ -51,3 +51,18 @@ Choose a component or group and use **Inspector → Place linked copy** to share
 GitHub Pages serves the editor from the repository root. The personal database setup is in `supabase/form-studio.sql` and `supabase/form-studio-projects.sql`, in that order, followed by `supabase/form-studio-access.sql`. The website uses a dedicated Studio password and an opaque session limited to Studio project operations.
 
 When publishing changes to the offline editor files, give `SHELL_VERSION` in `sw.js` a new value in the same release. Existing tabs finish using their cached version. A new version takes over after its files have downloaded and the previous editor tabs close.
+
+
+## Theme colors, palettes and drag selection
+
+Open **Theme → Browse & preview themes**. Choosing a preset immediately previews the current form; **Apply Theme** commits the change as one undoable edit. **Create my own theme** lets you save a named design with your own colors, fonts, button style and corners.
+
+Each color is labeled by purpose: page background, panel and input backgrounds, button background, button text, icons and accents, headings, body text, borders, or table headers and decorative shapes. **Show uses** outlines affected layers in pink on the preview. Under **Assign roles to existing layers**, choose a layer and its background, text or border role. **Keep current color** preserves that part when applying the theme. Images and embedded HTML retain their own colors.
+
+In **Palette → Create palette**, give colors a **Used for** purpose or leave them as free swatches. Named colors open a theme preview for that role. Free swatches use the explicit **Apply a color to** target: selected backgrounds, text, borders, or the current screen background. Saved themes, palettes and layer assignments travel with the editable project and its cloud copy.
+
+Drag from an empty canvas area to select layers fully inside a box. With **Box select** enabled, start the drag on a layer too; a click still toggles selection. Shift adds enclosed layers. Hidden and locked layers are excluded. Choose **Select** to move the selected layers together.
+
+After installing this release, **Settings → Updates** shows **Release: theme-roles1**. Use **Check for updates**, then **Update now** when the download is ready.
+
+Run the focused checks with `node --test tests/theme-selection.test.cjs`.

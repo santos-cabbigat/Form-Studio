@@ -47,7 +47,7 @@ function render(){clean();if(referencePick&&referencePick.context!==referenceCon
  $('button[data-cmd=undo]').innerHTML=icon('undo',15)+'<span>Undo</span>';$('button[data-cmd=undo]').disabled=!past.length;
  $('button[data-cmd=redo]').innerHTML=icon('redo',15)+'Redo';$('button[data-cmd=redo]').disabled=!future.length;
  $('button[data-cmd=preview]').innerHTML=icon('preview',14)+'Preview';$('button[data-cmd=export]').innerHTML=icon('export',14)+'Export';
- $('#selectTool').innerHTML=icon('select',15)+'Select';$('#panTool').innerHTML=icon('pan',16)+'Pan';$('#selectTool').classList.toggle('on',!panMode);$('#panTool').classList.toggle('on',panMode);$('#sizeBtn').innerHTML=icon('ruler',13)+project.widths[device]+' px '+icon('down',11);
+ $('#selectTool').innerHTML=icon('select',15)+'Select';$('#panTool').innerHTML=icon('pan',16)+'Pan';stage.classList.toggle('boxSelecting',multi&&!panMode);$('#selectTool').classList.toggle('on',!panMode&&!multi);$('#panTool').classList.toggle('on',panMode);$('#sizeBtn').innerHTML=icon('ruler',13)+project.widths[device]+' px '+icon('down',11);
  drawLibrary();drawBoard();drawProps();syncGuideButton();$('#multiTool').classList.toggle('on',multi);$('#multiTool').setAttribute('aria-pressed',String(multi))
 }
 const canvasLayers=new Map();
@@ -127,9 +127,9 @@ function drawLibrary(){
  }else if(tab==='Triggers'){
  const n=sel();pane='<div class="panel"><h2>Triggers</h2>'+(n?'<h3>'+esc(n.name)+'</h3>'+triggerList(n,true):'<p>Select an element to attach a trigger.</p>')+'<h3 class="mt">My trigger templates</h3>'+templateRows('',true)+btn('new-trigger','New trigger template','plus','addTemplate')+'</div>'
  }else if(tab==='Palette'){
- pane='<div class="panel"><h2>Color palette</h2><p>Apply a swatch to the selected element’s fill.</p><div class="swatches">'+project.palette.map(c=>'<button class="swatch" data-swatch="'+esc(c)+'" style="background:'+esc(c)+'" title="Apply '+esc(c)+'"></button>').join('')+'</div>'+field('Add a custom color','<input type="color" id="newColor" value="#a28bc2">')+colorPickButton('palette','palette color')+btn('add-color','Save color','plus','btn')+'<h3 class="mt">Palette presets</h3>'+['Studio violet','Coastal green','Warm clay'].map((v,i)=>'<button class="variant" data-palette="'+i+'">'+v+icon('right',13)+'</button>').join('')+'</div>'
+ pane=palettePanel()
  }else{
- pane='<div class="panel"><h2>Theme</h2>'+themePicker()+field('Project font','<select data-theme="font">'+options(families,project.theme.font)+'</select>')+themeColor('Accent','accent')+themeColor('Canvas background','background')+'<p>Theme settings apply across the project. Buttons using the accent color update together.</p></div>'
+ pane='<div class="panel"><h2>Theme</h2>'+themePicker()+'</div>'
  }
  $('#library').innerHTML=pane
 }
@@ -228,14 +228,14 @@ function parseElement(n,code){
  setBox(draft,b,device,project,page());return draft
 }
 function insertNode(n,at){
- const preset=projectPresets.find(t=>t.name===project.theme.preset);if(preset)styleLayerForTheme(n,preset);
+ const preset=project.theme.definition||projectPresets.find(t=>t.name===project.theme.preset);if(preset)styleLayerForTheme(n,preset);
  const pg=page(),[w,h]=bounds(pg,device,project),b=boxFor(n,device,project,pg);b[2]=Math.min(b[2],w-12);b[0]=Math.max(0,Math.min(w-b[2],at?.[0]??Math.round((w-b[2])/2)));b[1]=Math.max(0,Math.min(h-b[3],at?.[1]??Math.round((h-b[3])/2)));setBox(n,b,device,project,pg);
  change(()=>{pg.nodes.push(n);selected=[n.id]});dismiss();closeSide()
 }
 function addScreen(type){
  let p=type==='picker-demo'?pickerDemoScreen():['sample-entry','linked-entry'].includes(type)?sampleEntryScreen():type==='signin'?intro().pages[0]:makePage(type==='ledger'?'Account ledger':'Untitled screen');
  if(type==='ledger'){p.nodes=[node('Text','Account ledger',[36,40,380,46]),node('Button','Find account',[690,40,225,46]),createItem('Table','Ledger')];Object.assign(p.nodes[0].style,{fontSize:32,weight:700});p.nodes[2].boxes.laptop=[36,124,879,284]}
- const preset=projectPresets.find(t=>t.name===project.theme.preset);if(preset)for(const n of p.nodes)styleLayerForTheme(n,preset);
+ const preset=project.theme.definition||projectPresets.find(t=>t.name===project.theme.preset);if(preset)for(const n of p.nodes)styleLayerForTheme(n,preset);
  const companions=[];
  if(type==='linked-entry'){
    const ledger=makePage('Ledger');p.name='Entry';const table=p.nodes.pop();
@@ -253,7 +253,7 @@ function variantDialog(type,at){
  modal('Insert '+type.toLowerCase(),('<p class="hint">Choose a starting design or add one of your own.</p>')+variants[type].map((v,i)=>'<button class="variant" data-variant="'+i+'"><span>'+icon(categoryIcon(type))+v+'</span>'+icon('plus',15)+'</button>').join('')+project.templates.filter(t=>t.kind==='element'&&(pickerKind(t.node)?'Picker':t.node.type)===type||t.kind==='block'&&type==='Module'||t.kind==='window'&&type==='Window'||t.kind==='element'&&t.category===type).map(t=>preset('use-'+t.id,t.name,'library')).join('')+btn('type-template','Add a template','plus','addTemplate'));
  $('[data-cmd=type-template]').onclick=()=>templateDialog(null,type==='Button'?'button':'embed',type);
  $$('.dialog [data-variant]').forEach(el=>el.onclick=()=>{const ver=variants[type][+el.dataset.variant];
- if(type==='Window'){let w=makePage(ver,'window',ver==='Wide dialog'?640:440);if(ver!=='Blank window'){w.nodes=[node('Text','Window title',[24,38,330,40]),node('Button','Close',[24,157,145,44],{actions:[{event:'click',action:'close',target:''}]})];w.nodes[0].style.fontSize=27}const preset=projectPresets.find(t=>t.name===project.theme.preset);if(preset)for(const n of w.nodes)styleLayerForTheme(n,preset);createDestinations(w);return}
+ if(type==='Window'){let w=makePage(ver,'window',ver==='Wide dialog'?640:440);if(ver!=='Blank window'){w.nodes=[node('Text','Window title',[24,38,330,40]),node('Button','Close',[24,157,145,44],{actions:[{event:'click',action:'close',target:''}]})];w.nodes[0].style.fontSize=27}const preset=project.theme.definition||projectPresets.find(t=>t.name===project.theme.preset);if(preset)for(const n of w.nodes)styleLayerForTheme(n,preset);createDestinations(w);return}
  const n=type==='Picker'?createPicker(ver.toLowerCase()):createItem(type,ver);if(type==='Image'&&ver==='Upload image')pickImage(src=>{n.src=src;insertNode(n,at)});else insertNode(n,at)
  })
 }
@@ -297,7 +297,7 @@ function templateDialog(existing=null,initialKind=null,category=null){
  if(category==='Window')n.boxes.laptop=[0,0,460,310];n.name=name;saveTemplate({id:existing?.id||uid(),kind:category==='Window'?'window':'element',category,name,node:n})}catch(e){$('#tplError').textContent=e.message}}
 }
 function useTemplate(t){if(!t)return;if(t.kind==='trigger'){actionDialog(null,t.action);return}
- if(t.kind==='window'&&t.node){const w=makePage(t.name,'window',t.node.boxes.laptop[2]);w.height=t.node.boxes.laptop[3];const content=clone(t.node);content.id=uid();content.boxes.laptop[0]=0;content.boxes.laptop[1]=0;w.nodes=[content];const preset=projectPresets.find(t=>t.name===project.theme.preset);if(preset)for(const n of w.nodes)styleLayerForTheme(n,preset);createDestinations(w,[],[content.id]);return}if(t.layout){
+ if(t.kind==='window'&&t.node){const w=makePage(t.name,'window',t.node.boxes.laptop[2]);w.height=t.node.boxes.laptop[3];const content=clone(t.node);content.id=uid();content.boxes.laptop[0]=0;content.boxes.laptop[1]=0;w.nodes=[content];const preset=project.theme.definition||projectPresets.find(t=>t.name===project.theme.preset);if(preset)for(const n of w.nodes)styleLayerForTheme(n,preset);createDestinations(w,[],[content.id]);return}if(t.layout){
  const layout=clone(t.layout),maps=new Map(layout.nodes.map(n=>[n.id,uid()])),groups=new Map();
  const newPageId=uid(),groupId=uid();for(const n of layout.nodes){n.id=maps.get(n.id);delete n.sharedComponent;if(n.picker?.footerButton)n.picker.footerButton=maps.get(n.picker.footerButton)||n.picker.footerButton;for(const a of n.actions){if(maps.has(a.source))a.source=maps.get(a.source);if(a.fields)a.fields=a.fields.map(id=>maps.get(id)||id);if(maps.has(a.target))a.target=maps.get(a.target);else if(a.target===layout.id)a.target=newPageId}if(t.kind==='block')n.group=groupId;else if(n.group){if(!groups.has(n.group))groups.set(n.group,uid());n.group=groups.get(n.group)}}
  if(t.kind!=='block'){layout.id=newPageId;layout.name=t.name;delete layout.parentId;createDestinations(layout);return}
@@ -359,7 +359,12 @@ function validateImport(p){
  if(p.pages.some(pg=>pg?.backgrounds&&(typeof pg.backgrounds!=='object'||Object.entries(pg.backgrounds).some(([d,color])=>!Object.hasOwn(devices,d)||!validPaint(color)))))throw Error('A screen background is invalid.');
  if(p.pages.some(pg=>!pg||pg.devNote!==undefined&&typeof pg.devNote!=='string'))throw Error('Screen notes must be text.');
  if(!p.palette.every(hex)||!hex(p.theme.accent)||!hex(p.theme.background)||!families.includes(p.theme.font)||Object.keys(devices).some(d=>!sizes[d].includes(p.widths?.[d])))throw Error('Project theme or device settings are invalid.');
+ if(p.theme.definition&&!validTheme(p.theme.definition))throw Error('Theme settings are invalid.');
+ if(p.paletteRoles!==undefined&&!validPaletteRoles(p.paletteRoles))throw Error('Palette color roles are invalid.');
+ if(p.customThemes!==undefined&&(!Array.isArray(p.customThemes)||p.customThemes.some(t=>!id(t?.id)||!validTheme(t))))throw Error('A saved theme is invalid.');
+ if(p.customPalettes!==undefined&&(!Array.isArray(p.customPalettes)||p.customPalettes.some(a=>!id(a?.id)||typeof a.name!=='string'||!a.name.trim()||a.name.length>100||!Array.isArray(a.colors)||!a.colors.length||a.colors.length>32||!a.colors.every(hex)||a.roles!==undefined&&!validPaletteRoles(a.roles))))throw Error('A saved palette is invalid.');
  const checkNode=n=>{if(!n||!id(n.id)||!['Button','Text','Input','Image','Module','Shape','Table','Custom','Icon'].includes(n.type)||typeof n.name!=='string'||!n.style||!n.boxes?.laptop||!Array.isArray(n.actions)||Object.values(n.boxes).some(b=>!Array.isArray(b)||b.length!==4||b.some(v=>!Number.isFinite(v)))||n.style.radius<0||!Number.isFinite(n.style.radius)||!Number.isFinite(n.style.fontSize))throw Error('A component in the project is invalid.');
+ if(n.colorRoles!==undefined&&!validColorRoles(n.colorRoles))throw Error('A layer color assignment is invalid.');
  if(n.devNote!==undefined&&typeof n.devNote!=='string'||n.locked!==undefined&&typeof n.locked!=='boolean')throw Error('A layer note or lock setting is invalid.');
  if(n.type==='Icon'&&!Object.hasOwn(uiIcons,n.glyph))throw Error('Choose a supported UI icon.');
  if(n.labelParts!=null)labelHTML(n.labelParts);
@@ -382,10 +387,11 @@ function moveLayer(up){const n=sel();if(!n)return;const list=page().nodes,i=list
 function groupNodes(){if(selected.length<2){toast('Select two or more layers first.');return}let id=uid();multi=false;change(()=>page().nodes.filter(n=>selected.includes(n.id)).forEach(n=>{n.group=id;n.groupName='Layer group'}),'Elements grouped')}
 function removeSelection(){if(!selected.length)return;const ids=new Set(selected);change(()=>{page().nodes=page().nodes.filter(n=>!ids.has(n.id));selected=[]})}
 function command(c){
- if(c==='apply-preset'){useProjectTheme($('#presetChoice').value);return}
+ if(c==='apply-preset'){if($('#presetChoice'))useProjectTheme($('#presetChoice').value);return}
  if(c.startsWith('use-'))return useTemplate(project.templates.find(t=>t.id===c.slice(4)));
  const n=sel();
  switch(c){
+ case 'theme-studio':openProjectThemes();break;case 'create-theme':openProjectThemes(true);break;case 'create-palette':openPaletteEditor();break;case 'edit-palette':openPaletteEditor({name:'My palette',colors:[...project.palette],roles:project.paletteRoles||{}});break;case 'palette-theme':previewPaletteTheme();break;
  case 'website-settings':openStudioSettings();break;
  case 'site-logout':siteLogout();break;
  case 'expand-code':{const panel=$('#inspector');if(innerWidth<=850){$('#library').classList.remove('shown');panel.classList.add('shown')}syncCodeSize(!panel.classList.contains('wideCode'));break}
@@ -396,7 +402,7 @@ function command(c){
  case 'link-copy':placeLinked();break;case 'unlink-component':change(()=>selectedLayers().forEach(n=>delete n.sharedComponent),'Copy detached');break;case 'add-choice':editPickerChoice(-1,'add');break;case 'picker-demo':case 'linked-entry':case 'sample-entry':case 'signin':case 'blank':case 'ledger':addScreen(c);break;
  case 'replace-image':if(n)pickImage(src=>change(()=>n.src=src));break;
  case 'save-screen-template':saveBlock(true);break;case 'new-template':templateDialog();break;case 'add-action':actionDialog();break;case 'new-trigger':triggerTemplate();break;
- case 'multi':multi=!multi;if(multi)selectIds([]);render();break;case 'group':groupNodes();break;
+ case 'multi':multi=!multi;panMode=false;render();break;case 'group':groupNodes();break;
  case 'ungroup':{const groups=new Set(page().nodes.filter(n=>selected.includes(n.id)).map(n=>n.group).filter(Boolean));change(()=>page().nodes.filter(n=>groups.has(n.group)).forEach(n=>delete n.group));break}
  case 'forward':moveLayer(true);break;case 'back':moveLayer(false);break;case 'delete':removeSelection();break;
  case 'add-color':{const color=$('#newColor').value.toUpperCase();if(!project.palette.includes(color))change(()=>project.palette.push(color),'Color saved');break}
@@ -420,8 +426,12 @@ document.addEventListener('click',e=>{
  if(b.dataset.shiftAction!==undefined&&sel())moveTrigger(sel(),+b.dataset.shiftAction,+b.dataset.direction);
  if(b.dataset.rmaction!==undefined&&sel())change(()=>sel().actions.splice(+b.dataset.rmaction,1));
  if(b.dataset.edittemplate)manageTemplate(project.templates.find(t=>t.id===b.dataset.edittemplate));
- if(b.dataset.swatch){if(sel())change(()=>sel().style.fill=b.dataset.swatch);else toast('Select an element to apply this color.')}
- if(b.dataset.palette){const presets=[defaultColors,['#207C72','#123D41','#B9E4D7','#E9F4EF','#FFFFFF'],['#BB664A','#63382F','#F1CEAA','#F7EDDF','#FFFFFF']];change(()=>project.palette=[...presets[+b.dataset.palette]],'Palette changed')}
+ if(b.dataset.swatch)applyPaletteSwatch(b.dataset.swatch);
+ if(b.dataset.roleColor)previewPaletteTheme(b.dataset.roleColor);
+ if(b.dataset.palette!==undefined)change(()=>{project.palette=[...palettePresets[+b.dataset.palette].colors];delete project.paletteRoles},'Palette changed');
+ if(b.dataset.usePalette){const p=project.customPalettes?.find(p=>p.id===b.dataset.usePalette);if(p)change(()=>{project.palette=[...p.colors];project.paletteRoles=clone(p.roles||{})},'Palette selected')}
+ if(b.dataset.editPalette){const p=project.customPalettes?.find(p=>p.id===b.dataset.editPalette);if(p)openPaletteEditor(p)}
+ if(b.dataset.openTheme){const t=project.customThemes?.find(t=>t.id===b.dataset.openTheme);if(t)openProjectThemes(t)}
 });
 document.addEventListener('change',e=>{
  const t=e.target,n=sel(),pg=page();
@@ -441,16 +451,17 @@ document.addEventListener('input',e=>{if(e.target.id==='elementCode'){updateCode
 $('#pageBtn').onclick=pagesDialog;
 $('#projectName').onclick=()=>{modal('Rename project',field('Project name','<input id="projName" value="'+esc(project.name)+'">')+'<div class="dialogActions">'+btn('rename-project','Save','','btn primary')+'</div>');$('[data-cmd=rename-project]').onclick=()=>{const v=$('#projName').value.trim();if(v){change(()=>project.name=v);dismiss()}}};
 $('#sizeBtn').onclick=()=>{modal('Device size',field(cap(device)+' width','<select id="newSize">'+options(sizes[device].map(v=>[String(v),v+' px']),String(project.widths[device]))+'</select>')+'<div class="dialogActions">'+btn('apply-size','Apply','','btn primary')+'</div>');$('[data-cmd=apply-size]').onclick=()=>{const w=+$('#newSize').value;change(()=>project.widths[device]=w);dismiss()}};
-$('#selectTool').onclick=()=>{panMode=false;render()};$('#panTool').onclick=()=>{panMode=true;render()};$('#less').onclick=()=>{zoomFactor=Math.max(.4,zoomFactor/1.2);fitBoard()};$('#more').onclick=()=>{zoomFactor=Math.min(4,zoomFactor*1.2);fitBoard()};$('#zoom').onclick=()=>{zoomFactor=1;pan=[0,0];fitBoard();boardViewport.scrollTop=0};
+$('#selectTool').onclick=()=>{panMode=false;multi=false;render()};$('#panTool').onclick=()=>{panMode=true;multi=false;render()};$('#less').onclick=()=>{zoomFactor=Math.max(.4,zoomFactor/1.2);fitBoard()};$('#more').onclick=()=>{zoomFactor=Math.min(4,zoomFactor*1.2);fitBoard()};$('#zoom').onclick=()=>{zoomFactor=1;pan=[0,0];fitBoard();boardViewport.scrollTop=0};
 $('#openLib').onclick=()=>{const open=tab!=='Insert'||!$('#library').classList.contains('shown');tab='Insert';search='';render();closeSide();$('#library').classList.toggle('shown',open)};$('#openProps').onclick=()=>{$('#library').classList.remove('shown');$('#inspector').classList.toggle('shown')};
 const stage=$('#stage');
 // Only the drawing surface scrolls. The canvas controls stay within reach on long forms.
 const boardViewport=document.createElement('div');boardViewport.id='boardViewport';
 stage.insertBefore(boardViewport,$('#sheetWrap'));boardViewport.append($('#sheetWrap'));
 stage.addEventListener('pointerdown',e=>{
- if(e.button!==0||e.target.closest('.floatTools,#referenceNotice'))return;$('#library').classList.remove('shown');const wrap=e.target.closest('.nodeWrap');if(!wrap&&!panMode){selectIds([]);return}
+ if(e.button!==0||gesture||e.target.closest('.floatTools,#referenceNotice'))return;$('#library').classList.remove('shown');const wrap=e.target.closest('.nodeWrap');
  e.preventDefault();stage.setPointerCapture(e.pointerId);
  if(panMode){gesture={pan:[...pan],scrollTop:boardViewport.scrollTop,x:e.clientX,y:e.clientY};return}
+ if(!wrap||multi&&!e.target.dataset.handle){startBoxSelection(e,wrap?.dataset.id);return}
  const n=page().nodes.find(v=>v.id===wrap.dataset.id),handle=e.target.dataset.handle;
  if(n.locked)return;
  if(!handle&&(e.shiftKey||e.ctrlKey||e.metaKey||multi)){toggleLayers(n,true);return}
@@ -460,7 +471,7 @@ stage.addEventListener('pointerdown',e=>{
  if(!items.length)return;
  gesture={x:e.clientX,y:e.clientY,items,handle,targets:null,initial:null,before:[Math.min(...items.map(i=>i.box[0])),Math.min(...items.map(i=>i.box[1])),Math.max(...items.map(i=>i.box[0]+i.box[2])),Math.max(...items.map(i=>i.box[1]+i.box[3]))]};
 });
-stage.addEventListener('pointermove',e=>{if(!gesture)return;const g=gesture,dx=e.clientX-g.x,dy=e.clientY-g.y;if(g.pan){const long=boardViewport.classList.contains('longScreen');pan=[g.pan[0]+dx,long?0:g.pan[1]+dy];if(long)boardViewport.scrollTop=g.scrollTop-dy;fitBoard();return}if(Math.abs(dx)+Math.abs(dy)<3&&!g.moved)return;if(!g.moved){g.initial=JSON.stringify(project);g.targets=guideTargets(page(),new Set(selected));g.moved=true}
+stage.addEventListener('pointermove',e=>{if(!gesture)return;const g=gesture;if(g.marquee){updateBoxSelection(e);return}const dx=e.clientX-g.x,dy=e.clientY-g.y;if(g.pan){const long=boardViewport.classList.contains('longScreen');pan=[g.pan[0]+dx,long?0:g.pan[1]+dy];if(long)boardViewport.scrollTop=g.scrollTop-dy;fitBoard();return}if(Math.abs(dx)+Math.abs(dy)<3&&!g.moved)return;if(!g.moved){g.initial=JSON.stringify(project);g.targets=guideTargets(page(),new Set(selected));g.moved=true}
  const [l,t,r,b]=g.before;
  const assist=smartGuides&&!e.altKey;
  const {edges:[L,T,R,B],matches}=guidedBounds(g.before,Math.round(dx/scale),Math.round(dy/scale),g.handle,assist?g.targets:[],5/scale);
@@ -475,8 +486,8 @@ stage.addEventListener('pointermove',e=>{if(!gesture)return;const g=gesture,dx=e
  if(assist)drawGuides(rect,matches,g.handle,g.targets);else clearGuides();
  drawGapLabels(rect,g.targets[0].box);
 });
-function finishGesture(cancel=false){clearGuides();$('#sheet .gapOverlay')?.remove();if(gesture?.moved){const initial=gesture.initial;if(cancel){project=JSON.parse(initial)}else{remember(initial);write()}render()}gesture=null}
-stage.addEventListener('pointerup',()=>finishGesture());stage.addEventListener('pointercancel',()=>finishGesture(true));
+function finishGesture(cancel=false){if(gesture?.marquee){finishBoxSelection(cancel);return}if(gesture?.pan){if(cancel){pan=gesture.pan;boardViewport.scrollTop=gesture.scrollTop;fitBoard()}gesture=null;return}clearGuides();$('#sheet .gapOverlay')?.remove();if(gesture?.moved){const initial=gesture.initial;if(cancel){project=JSON.parse(initial)}else{remember(initial);write()}render()}gesture=null}
+stage.addEventListener('pointerup',()=>finishGesture());stage.addEventListener('pointercancel',()=>finishGesture(true));stage.addEventListener('lostpointercapture',()=>finishGesture(true));
 document.addEventListener('dragstart',e=>{const b=e.target.closest('[data-insert]');if(b)e.dataTransfer.setData('text/plain','formstudio:'+b.dataset.insert)});
 stage.addEventListener('dragover',e=>e.preventDefault());stage.addEventListener('drop',e=>{e.preventDefault();const t=e.dataTransfer.getData('text/plain').replace('formstudio:','');if(types.includes(t)){const r=$('#sheet').getBoundingClientRect();variantDialog(t,[(e.clientX-r.left)/scale,(e.clientY-r.top)/scale])}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){finishGesture(true);dismiss();closeSide();return}if(e.target.closest('textarea,input,select,[contenteditable],.dialog')||$('#overlay').children.length)return;

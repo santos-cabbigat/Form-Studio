@@ -278,43 +278,14 @@ const projectPresets = [...lightPresets,...nightColors.map(([name,canvas,surface
   ...lightPresets[i],name,colors:{canvas,surface,action,ink,line,tint,accent:action},night:true
 }))];
 function styleLayerForTheme(n,t){
-  const c=t.colors,s=n.style;
-  if(['Image','Custom'].includes(n.type))return;
-  s.color=c.ink;
-  if(n.type==='Text'||n.type==='Icon')return;
-  if(n.type==='Shape'){s.fill=c.tint;return}
-  s.fontSize=t.body;
-  const width=t.design==='double'?'3px double ':'1px solid ';
-  s.border=width+c.line;
-  s.radius=n.type==='Module'?t.panel:t.radius;
-  s.fill=c.surface;
-  if(n.type==='Button'){
-    const outline=n.variant==='Outline';
-    s.fill=outline?'transparent':'var(--accent)';
-    s.color=outline?c.action:(t.night?'#101820':'#FFFFFF');
-    s.border=width+c.action;
-    if(n.variant==='Pill')s.radius=99;
-  }
-  if(n.type==='Module')s.fill=c.tint;
-  if(pickerKind(n))n.picker={...n.picker,accent:c.action,background:c.surface,ink:c.ink,fontSize:t.body};
+  applyLayerTheme(n,completeTheme(t));
 }
 function useProjectTheme(name){
-  const t=projectPresets.find(item=>item.name===name);
-  if(!t)return;
-  change(()=>{
-    project.theme={...project.theme,preset:t.name,accent:t.colors.action,background:t.colors.canvas,
-      surface:t.colors.surface,ink:t.colors.ink,tint:t.colors.tint,line:t.colors.line,tabRadius:t.tabs==='pills'?30:t.radius,
-      font:t.font==='serif'?'Georgia, serif':'Arial, sans-serif'};
-    project.palette=[...new Set(Object.values(t.colors))];
-    for(const pg of project.pages){
-      delete pg.backgrounds;
-      for(const n of pg.nodes)styleLayerForTheme(n,t);
-    }
-  },t.name+' applied');
+  const t=[...projectPresets,...(project.customThemes||[])].find(item=>item.name===name);
+  if(t)openProjectThemes(t);
 }
 function themePicker(){
-  const selected=project.theme.preset;
-  const group=(title,items)=>'<optgroup label="'+title+'">'+items.map(t=>'<option '+(t.name===selected?'selected':'')+'>'+esc(t.name)+'</option>').join('')+'</optgroup>';
-  return field('Project theme','<select id="presetChoice">'+group('Light',projectPresets.slice(0,10))+group('Dark',projectPresets.slice(10))+'</select>')+
-    btn('apply-preset','Apply theme','','btn primary')+'<p>Restyles all screens and windows. Keeps positions, field connections and triggers. Undo restores the previous appearance.</p>';
+  return btn('theme-studio','Browse & preview themes','theme','btn full')+btn('create-theme','Create my own theme','plus','btn full mt')+
+    '<p>Colors are labeled by their purpose. Preview your existing form, then choose Apply Theme.</p><h3>My themes</h3>'+
+    ((project.customThemes||[]).map(t=>'<button class="variant" data-open-theme="'+esc(t.id)+'">'+esc(t.name)+'</button>').join('')||'<p class="hint">Save a theme to reuse it here.</p>');
 }

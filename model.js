@@ -34,7 +34,9 @@ function boxFor(n,device,p,page){
  const src=editableCanvasWidth(page,devices[base][0]);
  const dest=editableCanvasWidth(page,p.widths[device]);
  const scale=dest/src;
- return [Math.round(box[0]*scale),box[1],Math.max(8,Math.round(box[2]*scale)),box[3]]
+ // Round shared endpoints once so adjacent layers keep the same edge at other device widths.
+ const left=Math.round(box[0]*scale),right=Math.round((box[0]+box[2])*scale);
+ return [left,box[1],Math.max(8,right-left),box[3]]
 }
 function setBox(n,b,d,p,page){
  const base=editableCanvasWidth(page,devices[d][0]), actual=editableCanvasWidth(page,p.widths[d]);

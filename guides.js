@@ -91,6 +91,21 @@ function matchGuide(axis, rect, handle, targets, tolerance) {
   }
   let best=null,previous=null,next=null;
   const crossGap=target=>Math.max(0,target.box[other]-crossEnd,crossStart-target.box[other]-target.box[other+2]);
+  // A nearby physical edge can catch the selection from either side of a small gap.
+  let contact=null;
+  for(const target of targets){
+    if(target.canvas||crossGap(target)>2*tolerance)continue;
+    for(const from of ['start','end']){
+      if(handle&&from!==(low?'start':'end'))continue;
+      const to=from==='start'?'end':'start';
+      const line=target.box[axis]+(to==='end'?target.box[axis+2]:0);
+      const delta=line-(from==='start'?start:end);
+      if(Math.abs(delta)>2*tolerance||(handle&&size+(low?-delta:delta)<12))continue;
+      const score=Math.abs(delta)+crossGap(target);
+      if(!contact||score<contact.score)contact={axis,delta,target,line,from,to,score};
+    }
+  }
+  if(contact)return contact;
   function consider(delta,target,line,from,to,equalSize=false,pair=null){
     const gap=Math.abs(delta);
     if(gap>tolerance||(handle&&size+(low?-delta:delta)<12))return;
@@ -141,6 +156,23 @@ function guidedBounds(before, dx, dy, handle, targets, tolerance) {
     const active=axis===0?(left||right):(top||bottom);
     return !handle||active?matchGuide(axis,raw,handle,targets,tolerance):null;
   });
+  // When touching a neighboring side, catch its corner along the other axis too.
+  for(const axis of [0,1]){
+    const m=matches[axis],other=1-axis;
+    if(!m||m.target.canvas||m.from===m.to||!['start','end'].includes(m.from)||!['start','end'].includes(m.to)||matches[other]?.canvasEdge)continue;
+    if(handle&&!(other===0?(left||right):(top||bottom)))continue;
+    const target=m.target,ends=['start','end'];let corner=null;
+    for(const from of ends){
+      if(handle&&from!==((other===0?left:top)?'start':'end'))continue;
+      for(const to of ends){
+        const line=target.box[other]+(to==='end'?target.box[other+2]:0);
+        const delta=line-raw[other]-(from==='end'?raw[other+2]:0);
+        if(Math.abs(delta)>2*tolerance||(handle&&raw[other+2]+(from==='start'?-delta:delta)<12))continue;
+        if(!corner||Math.abs(delta)<Math.abs(corner.delta))corner={axis:other,from,to,target,line,delta};
+      }
+    }
+    if(corner)matches[other]=corner;
+  }
   const x=matches[0]?.delta||0,y=matches[1]?.delta||0;
   if(!handle||left) l+=x;
   if(!handle||right) r+=x;
@@ -211,7 +243,14 @@ function drawGuides(rect, matches, handle, targets) {
     const box=target.box;
     const x=[rect[0],rect[0]+rect[2]].find(x=>[box[0],box[0]+box[2]].some(v=>Math.abs(x-v)<.51));
     const y=[rect[1],rect[1]+rect[3]].find(y=>[box[1],box[1]+box[3]].some(v=>Math.abs(y-v)<.51));
-    if(x!==undefined&&y!==undefined){dot(x,y);labels.unshift('Corners meet · '+target.name);break}
+    const sideTouch=rect[0]+rect[2]===box[0]||box[0]+box[2]===rect[0];
+    const endTouch=rect[1]+rect[3]===box[1]||box[1]+box[3]===rect[1];
+    const overlap=(axis)=>Math.min(rect[axis]+rect[axis+2],box[axis]+box[axis+2])-Math.max(rect[axis],box[axis]);
+    if(sideTouch&&overlap(1)>=0||endTouch&&overlap(0)>=0){
+      const corner=x!==undefined&&y!==undefined;
+      if(corner)dot(x,y);
+      labels.unshift((corner?'Corners meet':'Edges touch')+' · 0 px gap · '+target.name);break;
+    }
   }
   updateAlignmentStatus(alignmentStatus(center,labels),center);
   const objectLabels=labels.filter(label=>!label.includes('on page')&&!label.endsWith('edge · 0 px'));

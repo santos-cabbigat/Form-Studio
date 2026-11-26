@@ -64,3 +64,16 @@ test('device-sized and custom windows share exact editable bounds with layer coo
  return {sizes,updated:bounds(win,'laptop',p),custom:bounds(custom,'laptop',p),phone:bounds(custom,'phone',p),radius:shape.style.radius}})()`);
  assert.deepEqual(result,{sizes:[[0,0,960,600],[0,0,768,760],[0,0,390,760]],updated:[1280,800],custom:[460,310],phone:[390,310],radius:0});
 });
+
+test('neighboring edges and corners meet across gaps and slight overlaps',()=>{
+ context.adjacent=[frame,{box:[240,120,100,80],name:'Neighbor'}];
+ for(const [left,top,x,y] of [[346,127,340,120],[334,115,340,120],[174,196,180,200],[346,207,340,200],[343,135,340,135]]){
+   const edges=run('guidedBounds([0,0,60,50],'+left+','+top+',null,adjacent,5).edges');
+   assert.deepEqual(edges,[x,y,x+60,y+50]);
+ }
+});
+test('shared horizontal coordinates stay joined when a device scales two adjacent rectangles',()=>{
+ const result=run(`(()=>{const p=intro(),pg=makePage('Test'),a=node('Shape','Left',[1,10,52,80]),b=node('Shape','Right',[53,10,83,80]);
+ return Object.keys(devices).map(d=>{const [x,,w]=boxFor(a,d,p,pg);return boxFor(b,d,p,pg)[0]-(x+w)})})()`);
+ assert.deepEqual(result,[0,0,0]);
+});

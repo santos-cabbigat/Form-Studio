@@ -59,7 +59,7 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
    tables.set(n.id,n);records.set(n.id,mode==='empty'?[]:mode==='sample'?tableLines(n).slice(1):seedRows(n));
  }
  const nav=document.createElement('nav');nav.className='screenTabs';nav.setAttribute('aria-label','Project screens');
- if(screens.length>1){root.prepend(nav);for(const pg of screens){
+ if(screens.length>1&&interactivePreview!=='canvas'){root.prepend(nav);for(const pg of screens){
    const b=document.createElement('button');b.type='button';b.textContent=pg.name;b.dataset.page=pg.id;
    b.onclick=()=>{cancelRuns();closeWindow();current=pg;draw()};nav.append(b);
  }}
@@ -154,7 +154,7 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
  function device(){return forcedDevice||(window.innerWidth<600?'phone':window.innerWidth<1040?'tablet':'laptop')}
  function paint(page,target,available){
  const d=device(),[w,h]=bounds(page,d,p);const zoom=Math.min(1,available/w);
- const board=document.createElement('section');board.className='board';board.dataset.pageId=page.id;board.style.cssText='width:'+w+'px;height:'+h+'px;transform:scale('+zoom+');';board.style.backgroundColor=page.backgrounds?.[d]||p.theme.background;
+ const board=document.createElement('section');board.className='board';board.dataset.pageId=page.id;board.style.cssText='width:'+w+'px;height:'+h+'px;zoom:'+zoom+';';board.style.backgroundColor=page.backgrounds?.[d]||p.theme.background;
  const outer=document.createElement('div');outer.className='sized';outer.style.width=w*zoom+'px';outer.style.height=h*zoom+'px';outer.append(board);target.replaceChildren(outer);
  page.nodes.filter(n=>!n.hide?.[d]).forEach(n=>{
  let el=makeEl(n,boxFor(n,d,p,page),false,records.get(n.id));board.append(el);if(hidden.has(n.id))el.style.visibility='hidden';
@@ -288,7 +288,7 @@ function runtime(p,mode,start,forcedDevice,response='success',interactivePreview
    const outer=container.firstElementChild,board=outer?.firstElementChild;
    if(!board)return;
    const width=parseFloat(board.style.width),height=parseFloat(board.style.height),zoom=Math.min(1,available/width);
-   board.style.transform='scale('+zoom+')';outer.style.width=width*zoom+'px';outer.style.height=height*zoom+'px';
+   board.style.zoom=zoom;outer.style.width=width*zoom+'px';outer.style.height=height*zoom+'px';
  }
  window.addEventListener('resize',()=>{clearTimeout(resize);resize=setTimeout(()=>{
    if(lastDevice!==device()){draw();return}
@@ -324,5 +324,5 @@ function runtimeHead(p){
 function buildHTML(p,start,device,dataState,response,interactivePreview=false){
  const safe=o=>JSON.stringify(o).replace(/</g,'\\u003c');
  const liveProject={...p,templates:[]};
- return runtimeHead(p)+'<script>'+runtimeCode()+'\nruntime('+safe(liveProject)+','+safe(dataState||'design')+','+safe(start||p.pages[0].id)+','+safe(device||null)+','+safe(response||'success')+','+Boolean(interactivePreview)+');<\/script></body></html>';
+ return runtimeHead(p)+'<script>'+runtimeCode()+'\nruntime('+safe(liveProject)+','+safe(dataState||'design')+','+safe(start||p.pages[0].id)+','+safe(device||null)+','+safe(response||'success')+','+safe(interactivePreview)+');<\/script></body></html>';
 }

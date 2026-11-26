@@ -14,6 +14,7 @@ function rendererForColorPick() {
   return loadColorRenderer;
 }
 function pickDesignColor(target){
+  endCanvasPreview();
   const n=sel(),currentPage=pageId;
   modal('Pick a color','<p class="hint">Tap a color in this snapshot of your design.</p><div id="colorSnapshot" role="status">Preparing canvas…</div><div class="dialogActions">'+
     (typeof window.EyeDropper==='function'?btn('sample-screen','Pick anywhere on screen','','btn'):'')+btn('dismiss','Cancel','','btn')+'</div>',true);
@@ -34,7 +35,7 @@ function pickDesignColor(target){
     const canvas=await raster(sheet,{width:w,height:h,scale:Math.min(1,2048/Math.max(w,h)),logging:false,
       backgroundColor:project.theme.background,
       ignoreElements:el=>el.matches?.('.handle,.snapOverlay,.gapOverlay,#referenceArea'),
-      onclone:doc=>{const s=doc.querySelector('#sheet');s.style.transform='none';s.style.boxShadow='none';s.querySelectorAll('.selected').forEach(el=>el.classList.remove('selected'))}
+      onclone:doc=>{const s=doc.querySelector('#sheet');s.style.zoom=1;s.style.boxShadow='none';s.querySelectorAll('.selected').forEach(el=>el.classList.remove('selected'))}
     });
     if(!host.isConnected)return;
     canvas.setAttribute('aria-label','Design color sampler');host.replaceChildren(canvas);

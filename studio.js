@@ -47,7 +47,7 @@ function render(){clean();if(referencePick&&referencePick.context!==referenceCon
  $('button[data-cmd=undo]').innerHTML=icon('undo',15)+'<span>Undo</span>';$('button[data-cmd=undo]').disabled=!past.length;
  $('button[data-cmd=redo]').innerHTML=icon('redo',15)+'Redo';$('button[data-cmd=redo]').disabled=!future.length;
  $('button[data-cmd=preview]').innerHTML=icon('preview',14)+'Preview';$('button[data-cmd=export]').innerHTML=icon('export',14)+'Export';
- $('#selectTool').innerHTML=icon('select',15)+'Select';$('#panTool').innerHTML=icon('pan',16)+'Pan';stage.classList.toggle('boxSelecting',multi&&!panMode);$('#selectTool').classList.toggle('on',!panMode&&!multi);$('#panTool').classList.toggle('on',panMode);$('#sizeBtn').innerHTML=icon('ruler',13)+deviceViewport(project,device).join(' × ')+' px '+icon('down',11);
+ $('#selectTool').innerHTML=icon('select',15)+'Select';$('#panTool').innerHTML=icon('pan',16)+'Pan';stage.classList.toggle('boxSelecting',multi&&!panMode);$('#selectTool').classList.toggle('on',!panMode&&!multi);$('#panTool').classList.toggle('on',panMode);
  drawLibrary();drawBoard();drawProps();syncGuideButton();$('#multiTool').classList.toggle('on',multi);$('#multiTool').setAttribute('aria-pressed',String(multi))
 }
 const canvasLayers=new Map();
@@ -82,7 +82,10 @@ function drawBoard(){
    next=wrap.nextElementSibling;
  }
  for(const [id,entry] of canvasLayers)if(!visible.has(id)){entry.wrap.remove();canvasLayers.delete(id)}
- $('#boardLabel').innerHTML=icon(pg.kind==='window'?'window':'page',13)+esc(pg.name);$('#boardSize').textContent=deviceViewport(project,device).join(' × ')+(pg.kind==='window'?' · '+w+' × '+h+' window':h>deviceViewport(project,device)[1]?' · scroll':'');fitBoard()
+ const sizeButton=$('#sizeBtn');
+ sizeButton.textContent=(pg.kind==='window'?'Window':cap(device))+' · '+w+' × '+h+' px';
+ sizeButton.title='Editable canvas size · Open device settings';
+ fitBoard()
 }
 function position(el,b){Object.assign(el.style,{left:b[0]+'px',top:b[1]+'px',width:b[2]+'px',height:b[3]+'px'})}
 let boardContext='';
@@ -95,9 +98,6 @@ function fitBoard(){
  boardViewport.classList.toggle('longScreen',long);
  const widthFit=Math.min((stage.clientWidth-margin)/viewport[0],1.35);
  scale=Math.max(.1,Math.min(widthFit,viewHeight/viewport[1])*zoomFactor);
- let frame=$('#deviceCanvasFrame');
- if(page().kind==='window'&&!frame){frame=document.createElement('div');frame.id='deviceCanvasFrame';frame.className='deviceCanvasFrame';frame.append(document.createElement('span'));boardViewport.prepend(frame)}
- if(frame){frame.hidden=page().kind!=='window';Object.assign(frame.style,{width:viewport[0]*scale+'px',height:viewport[1]*scale+'px',transform:'translate(calc(-50% + '+pan[0]+'px),calc(-50% + '+pan[1]+'px))'});frame.firstElementChild.textContent=cap(device)+' · '+viewport.join(' × ')}
  sheet.style.setProperty('--inverse-scale',1/scale);
  sheet.style.transform='scale('+scale+')';wrap.style.width=w*scale+'px';wrap.style.height=h*scale+'px';
  wrap.style.transform='translate(calc(-50% + '+pan[0]+'px),'+(long?'0px':'calc(-50% + '+pan[1]+'px)')+')';
@@ -232,7 +232,7 @@ function parseElement(n,code){
 }
 function insertNode(n,at){
  const preset=project.theme.definition||projectPresets.find(t=>t.name===project.theme.preset);if(preset)styleLayerForTheme(n,preset);
- const pg=page(),[w,h]=bounds(pg,device,project),b=boxFor(n,device,project,pg);b[2]=Math.min(b[2],w-12);b[0]=Math.max(0,Math.min(w-b[2],at?.[0]??Math.round((w-b[2])/2)));b[1]=Math.max(0,Math.min(h-b[3],at?.[1]??Math.round((h-b[3])/2)));setBox(n,b,device,project,pg);
+ const pg=page(),[w,h]=bounds(pg,device,project),b=boxFor(n,device,project,pg);b[2]=Math.min(b[2],w);b[0]=Math.max(0,Math.min(w-b[2],at?.[0]??Math.round((w-b[2])/2)));b[1]=Math.max(0,Math.min(h-b[3],at?.[1]??Math.round((h-b[3])/2)));setBox(n,b,device,project,pg);
  change(()=>{pg.nodes.push(n);selected=[n.id]});dismiss();closeSide()
 }
 function addScreen(type){
@@ -256,7 +256,7 @@ function variantDialog(type,at){
  modal('Insert '+type.toLowerCase(),('<p class="hint">Choose a starting design or add one of your own.</p>')+variants[type].map((v,i)=>'<button class="variant" data-variant="'+i+'"><span>'+icon(categoryIcon(type))+v+'</span>'+icon('plus',15)+'</button>').join('')+project.templates.filter(t=>t.kind==='element'&&(pickerKind(t.node)?'Picker':t.node.type)===type||t.kind==='block'&&type==='Module'||t.kind==='window'&&type==='Window'||t.kind==='element'&&t.category===type).map(t=>preset('use-'+t.id,t.name,'library')).join('')+btn('type-template','Add a template','plus','addTemplate'));
  $('[data-cmd=type-template]').onclick=()=>templateDialog(null,type==='Button'?'button':'embed',type);
  $$('.dialog [data-variant]').forEach(el=>el.onclick=()=>{const ver=variants[type][+el.dataset.variant];
- if(type==='Window'){let w=makePage(ver,'window',ver==='Wide dialog'?640:440);if(ver!=='Blank window'){w.nodes=[node('Text','Window title',[24,38,330,40]),node('Button','Close',[24,157,145,44],{actions:[{event:'click',action:'close',target:''}]})];w.nodes[0].style.fontSize=27}const preset=project.theme.definition||projectPresets.find(t=>t.name===project.theme.preset);if(preset)for(const n of w.nodes)styleLayerForTheme(n,preset);createDestinations(w);return}
+ if(type==='Window'){let w=makePage(ver,'window',ver==='Blank window'?undefined:ver==='Wide dialog'?640:440);if(ver!=='Blank window'){w.nodes=[node('Text','Window title',[24,38,330,40]),node('Button','Close',[24,157,145,44],{actions:[{event:'click',action:'close',target:''}]})];w.nodes[0].style.fontSize=27}const preset=project.theme.definition||projectPresets.find(t=>t.name===project.theme.preset);if(preset)for(const n of w.nodes)styleLayerForTheme(n,preset);createDestinations(w);return}
  const n=type==='Picker'?createPicker(ver.toLowerCase()):createItem(type,ver);if(type==='Image'&&ver==='Upload image')pickImage(src=>{n.src=src;insertNode(n,at)});else insertNode(n,at)
  })
 }
@@ -377,7 +377,7 @@ function validateImport(p){
  if(n.type==='Custom'&&typeof n.html!=='string')throw Error('A custom component is invalid.');if(n.type==='Table'&&(typeof n.rows!=='string'||!n.rows.split(/\r?\n/).some(line=>line.trim())))throw Error('A table is invalid.');
  if(!pickerSettingValid(n.picker,pickerKind(n))||n.actions.some(a=>!triggerOK(a)))throw Error('An interaction is invalid.')};
  const seen=new Set();function unique(key){if(seen.has(key))throw Error('Two screens or layers share an ID. Each needs a unique ID.');seen.add(key)}
- for(const pg of p.pages){if(!pg||!id(pg.id)||typeof pg.name!=='string'||!Array.isArray(pg.nodes)||!['screen','window'].includes(pg.kind))throw Error('A screen definition is invalid.');if(pg.kind==='window'&&(!Number.isFinite(pg.width)||!Number.isFinite(pg.height)))throw Error('Window dimensions are invalid.');unique(pg.id);for(const n of pg.nodes){checkNode(n);unique(n.id)}}
+ for(const pg of p.pages){if(!pg||!id(pg.id)||typeof pg.name!=='string'||!Array.isArray(pg.nodes)||!['screen','window'].includes(pg.kind))throw Error('A screen definition is invalid.');if(pg.kind==='window'&&(!Number.isFinite(pg.width)||!Number.isFinite(pg.height)||(pg.deviceSized!==undefined&&typeof pg.deviceSized!=='boolean')))throw Error('Window dimensions are invalid.');unique(pg.id);for(const n of pg.nodes){checkNode(n);unique(n.id)}}
  if(p.categories!==undefined&&!Array.isArray(p.categories))throw Error('Invalid category list.');
  for(const category of p.categories||[]){
    if(!category||category.kind!=='category'||!id(category.id)||typeof category.name!=='string'||!category.name.trim())throw Error('A category is invalid.');
@@ -448,7 +448,9 @@ document.addEventListener('change',e=>{
  if(t.dataset.choiceLabel!==undefined||t.dataset.choiceValue!==undefined){editPickerChoice(Number(t.dataset.choiceLabel??t.dataset.choiceValue),t.dataset.choiceLabel!==undefined?'label':'value',t.value);return}
  if(t.id==='glyphChoice'&&n.type==='Icon'&&Object.hasOwn(uiIcons,t.value))change(()=>n.glyph=t.value);
  if(t.dataset.prop)change(()=>{n[t.dataset.prop]=t.value;if(t.dataset.prop==='text'&&n.labelParts)delete n.labelParts});
- if(t.dataset.box!==undefined){let b=boxFor(n,device,project,pg);if(!t.value.trim()||!Number.isFinite(+t.value))return;b[+t.dataset.box]=+t.value;change(()=>setBox(n,b,device,project,pg))}
+ if(t.dataset.box!==undefined){let b=boxFor(n,device,project,pg);if(!t.value.trim()||!Number.isFinite(+t.value))return;b[+t.dataset.box]=+t.value;
+   if(t.dataset.box==='2'&&n.type==='Shape'&&n.variant==='Rectangle'&&b[2]===bounds(pg,device,project)[0])b[0]=0;
+   change(()=>setBox(n,b,device,project,pg))}
  if(t.dataset.style){const k=t.dataset.style;change(()=>n.style[k]=['radius','fontSize'].includes(k)?Math.max(k==='radius'?0:1,+t.value):t.value)}
 });
 document.addEventListener('input',e=>{if(e.target.id==='elementCode'){updateCodeDraft(e.target.value);return}if(e.target.id==='search'){search=e.target.value;drawLibrary();const inp=$('#search');inp.focus();inp.setSelectionRange(search.length,search.length)}});

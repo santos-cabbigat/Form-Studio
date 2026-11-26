@@ -31,9 +31,9 @@ test('box selection handles both drag directions, partial overlap, and additive 
  assert.deepEqual(plain(run("touchedLayerIds(boxes,[0,0],[35,35],['two'])")),['two','one']);
 });
 test('new dependency and release identity are included in both entry pages',()=>{
- for(const file of ['index.html','account.html']){const html=fs.readFileSync(path.join(root,file),'utf8');assert.match(html,/theme-studio\.js\?v=drag-guides3/);assert.match(html,/studio\.js\?v=drag-guides3/)}
- assert.match(fs.readFileSync(path.join(root,'sw.js'),'utf8'),/SHELL_VERSION = 'drag-guides3'/);
- assert.match(fs.readFileSync(path.join(root,'website-settings.js'),'utf8'),/STUDIO_RELEASE='drag-guides3'/);
+ for(const file of ['index.html','account.html']){const html=fs.readFileSync(path.join(root,file),'utf8');assert.match(html,/theme-studio\.js\?v=drag-guides3/);assert.match(html,/"studio\.js\?v=canvas-edges4/)}
+ assert.match(fs.readFileSync(path.join(root,'sw.js'),'utf8'),/SHELL_VERSION = 'canvas-edges4'/);
+ assert.match(fs.readFileSync(path.join(root,'website-settings.js'),'utf8'),/STUDIO_RELEASE='canvas-edges4'/);
 });
 
 test('offline installer caches the new theme editor and every referenced file',()=>{

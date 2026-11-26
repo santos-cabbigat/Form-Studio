@@ -1,5 +1,5 @@
 'use strict';
-const STUDIO_RELEASE='drag-guides3';
+const STUDIO_RELEASE='canvas-edges4';
 
 function activateStudioUpdate(worker){
  const sw=navigator.serviceWorker;
@@ -94,7 +94,7 @@ function bindStudioUpdates(dialog){
 }
 
 function deviceSettingsMarkup(){
- return '<section id="deviceSizeSettings"><h3>Device canvas sizes</h3><p>Use the same device size across this project’s screens and previews. Longer content scrolls. Popup windows appear inside the same device frame.</p><form id="deviceSizeForm"><div class="deviceSizeGrid"><b>Device</b><b>Width (px)</b><b>Height (px)</b>'+Object.keys(devices).map(d=>'<label for="deviceWidth-'+d+'">'+esc(cap(d))+'</label><select id="deviceWidth-'+d+'" data-device-width="'+d+'" aria-label="'+cap(d)+' width">'+options(sizes[d].map(v=>[String(v),String(v)]),String(project.widths[d]))+'</select><input type="number" data-device-height="'+d+'" aria-label="'+cap(d)+' height" required min="240" max="4000" step="1" value="'+deviceViewport(project,d)[1]+'">').join('')+'</div><div class="row"><button class="btn" type="button" id="resetDeviceSizes">Reset to defaults</button><button class="btn primary" type="submit">Apply sizes</button></div><p id="deviceSizeResult" role="status"></p></form></section>';
+ return '<section id="deviceSizeSettings"><h3>Device canvas sizes</h3><p>Use the same device size across this project’s screens and previews. Longer content scrolls. New blank windows follow these sizes. Choose a custom width and height in the window settings when needed.</p><form id="deviceSizeForm"><div class="deviceSizeGrid"><b>Device</b><b>Width (px)</b><b>Height (px)</b>'+Object.keys(devices).map(d=>'<label for="deviceWidth-'+d+'">'+esc(cap(d))+'</label><select id="deviceWidth-'+d+'" data-device-width="'+d+'" aria-label="'+cap(d)+' width">'+options(sizes[d].map(v=>[String(v),String(v)]),String(project.widths[d]))+'</select><input type="number" data-device-height="'+d+'" aria-label="'+cap(d)+' height" required min="240" max="4000" step="1" value="'+deviceViewport(project,d)[1]+'">').join('')+'</div><div class="row"><button class="btn" type="button" id="resetDeviceSizes">Reset to defaults</button><button class="btn primary" type="submit">Apply sizes</button></div><p id="deviceSizeResult" role="status"></p></form></section>';
 }
 
 function bindDeviceSettings(dialog){

@@ -65,21 +65,31 @@ function pageSettings(){destinationDialog(page())}
 function destinationDialog(item,onCreate=null,onDone=pagesDialog,initial=item.parentId||''){
  const category=item.kind==='category',isWindow=item.kind==='window',existing=!onCreate;
  const title=(existing?'Edit ':'New ')+item.kind;
- const dimensions=isWindow?'<div class="row">'+field('Width (px)','<input id="pgWidth" type="number" min="120" max="2000" value="'+item.width+'">')+
+ const viewport=deviceViewport(project,device);
+ const dimensions=isWindow?'<label><input type="checkbox" id="pgDeviceSize" '+(item.deviceSized?'checked':'')+'> Use device size</label><div class="row">'+field('Width (px)','<input id="pgWidth" type="number" min="120" max="2000" value="'+item.width+'">')+
    field('Height (px)','<input id="pgHeight" type="number" min="100" max="2400" value="'+item.height+'">')+'</div>':'';
  const manage=existing?'<div class="treeManage">'+btn('branch-code','View grouped code','code','chip')+
    (parentChoices({kind:'category'}).some(([key])=>key===item.id)?btn('sub-category','Add subcategory','plus','chip'):'')+
    btn('delete-destination','Delete '+item.kind,'','chip')+'</div>':'';
  modal(title,field('Name','<input id="pgName" value="'+esc(item.name)+'" placeholder="'+cap(item.kind)+' name">')+
    locationField(item,initial)+dimensions+manage+'<p id="destinationError" class="error" role="alert"></p><div class="dialogActions">'+btn('dismiss','Cancel')+btn('save-page',existing?'Save':'Create '+item.kind,'check','btn primary')+'</div>');
+ if(isWindow){
+   const useDevice=$('#pgDeviceSize'),width=$('#pgWidth'),height=$('#pgHeight');
+   const sync=()=>{
+     width.disabled=height.disabled=useDevice.checked;
+     width.value=useDevice.checked?viewport[0]:item.deviceSized?viewport[0]:item.width;
+     height.value=useDevice.checked?viewport[1]:item.deviceSized?viewport[1]:item.height;
+   };
+   useDevice.onchange=sync;sync();
+ }
  $('.dialog [data-cmd=save-page]').onclick=()=>{
    const name=$('#pgName').value.trim(),parent=$('#destinationParent').value;
    if(!name){$('#destinationError').textContent='Enter a name.';return}
    const w=$('#pgWidth')?.valueAsNumber,h=$('#pgHeight')?.valueAsNumber;
-   if(isWindow&&(!Number.isFinite(w)||w<120||w>2000||!Number.isFinite(h)||h<100||h>2400)){
+   if(isWindow&&!$('#pgDeviceSize').checked&&(!Number.isFinite(w)||w<120||w>2000||!Number.isFinite(h)||h<100||h>2400)){
      $('#destinationError').textContent='Enter a width of 120–2000 px and a height of 100–2400 px.';return;
    }
-   change(()=>{item.name=name;setParent(item,parent);if(isWindow){item.width=w;item.height=h}if(onCreate)onCreate()});
+   change(()=>{item.name=name;setParent(item,parent);if(isWindow){item.deviceSized=$('#pgDeviceSize').checked;if(!item.deviceSized){item.width=w;item.height=h}}if(onCreate)onCreate()});
    onDone();
  };
  if(!existing)return;

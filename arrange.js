@@ -49,8 +49,8 @@ function moveArrangedMember(member, axis, delta) {
   const {node, box} = member;
   const pg = page();
   // Keep normalized horizontal coordinates fractional so any preset width can express an exact pixel.
-  const baseWidth = pg.kind === 'window' ? Math.min(pg.width, devices[device][0] - 24) : devices[device][0];
-  const actualWidth = pg.kind === 'window' ? Math.min(pg.width, project.widths[device] - 24) : project.widths[device];
+  const baseWidth = editableCanvasWidth(pg,devices[device][0]);
+  const actualWidth = editableCanvasWidth(pg,project.widths[device]);
   const ratio = baseWidth / actualWidth;
   const layout = node.boxes[device] || [box[0]*ratio, box[1], box[2]*ratio, box[3]];
   layout[axis] = (box[axis] + delta) * (axis === 0 ? ratio : 1);

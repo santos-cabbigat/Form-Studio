@@ -105,6 +105,7 @@ function inlinePlan(raw,nodes,kind,pg){
   plan.name=wrapper.dataset.name?.trim()||selectionTitle();
   if(kind==='window'){
     const w=Number(wrapper.dataset.width),h=Number(wrapper.dataset.height);
+    if(pg.deviceSized&&w===project.widths[device]&&h===deviceViewport(project,device)[1])return plan;
     if(!Number.isFinite(w)||!Number.isFinite(h)||w<120||w>2000||h<100||h>2400)throw Error('Enter a window width of 120–2000 and height of 100–2400 pixels.');
     plan.width=w;plan.height=h;
   }
@@ -117,7 +118,7 @@ async function measureCodeInsertions(plan,pg,active){
     const samples=new Map();
     for(const d of Object.keys(devices)){
       if(!active())return;
-      const width=pg.kind==='window'?Math.min(pg.width,project.widths[d]-24):project.widths[d];
+      const width=editableCanvasWidth(pg,project.widths[d]);
       samples.set(d,await inspectHTMLDesign(style+'\n'+chunk.html,width));
     }
     if(!active())return;
@@ -166,7 +167,7 @@ function placeCodeInsertions(plan,pg,kind,members){
           before=candidate;break;
         }
       }
-      const anchor=before||after,canvasWidth=pg.kind==='window'?Math.min(pg.width,project.widths[d]-24):project.widths[d];
+      const anchor=before||after,canvasWidth=editableCanvasWidth(pg,project.widths[d]);
       const dx=anchor?Math.max(0,Math.min(anchor[0],canvasWidth-source[2]))-source[0]:0;
       const earlier=siblings.filter(n=>!n.hide?.[d]);
       let y=source[1];
@@ -176,7 +177,7 @@ function placeCodeInsertions(plan,pg,kind,members){
       else if(original.length){
         for(const n of original)if(!n.hide?.[d]){const b=layouts(n)[d];y=Math.max(y,b[1]+b[3]+12)}
       }
-      if(pg.kind==='window')y=Math.max(0,Math.min(y,pg.height-source[3]));
+      if(pg.kind==='window')y=Math.max(0,Math.min(y,bounds(pg,d,project)[1]-source[3]));
       for(const n of visible){const b=layouts(n)[d];b[0]+=dx;b[1]+=y-source[1];adjusted.add(n)}
       // Only shift a run of vertically stacked screen layers in the insertion column.
       // Overlapping artwork, other columns and dialog/group compositions keep their positions.

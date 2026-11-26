@@ -7,7 +7,7 @@ function syncGuideButton() {
   control.setAttribute('aria-pressed', String(smartGuides));
   control.classList.toggle('on', smartGuides);
   control.textContent=smartGuides?'Guides on':'Guides off';
-  control.title='Live guides for page centers and nearby layers. Hold Alt while dragging to move without snapping.';
+  control.title='Live guides for canvas edges, page centers and nearby layers. Hold Alt while dragging to move without snapping.';
 }
 function toggleSmartGuides() {
   smartGuides = !smartGuides;
@@ -25,6 +25,7 @@ function pageCenterAlignment(rect,frame,epsilon=.51) {
 
 function describeAlignment(match) {
   if(!match||match.equalSize)return '';
+  if(match.canvasEdge)return ['Left','Top','Right','Bottom'][match.axis+(match.from==='end'?2:0)]+' edge · 0 px';
   if(match.pair)return 'Equal gaps · '+Number(match.pair.span.toFixed(1))+' px';
   if(match.from==='center'&&match.to==='center'){
     if(match.target.canvas)return match.axis===0?'Centered horizontally on page':'Centered vertically on page';
@@ -74,6 +75,20 @@ function matchGuide(axis, rect, handle, targets, tolerance) {
   const resizeEdge = low ? start : end;
   const center=start+size/2, first=(handle?resizeEdge:start)-tolerance, last=(handle?resizeEdge:end)+tolerance;
   const other=1-axis, crossStart=rect[other], crossEnd=crossStart+rect[other+2];
+  // Give the physical boundary priority inside a ten-screen-pixel capture zone.
+  const frame=targets.find(target=>target.canvas);
+  if(frame){
+    let edgeMatch=null;
+    for(const side of ['start','end']){
+      if(handle&&side!==(low?'start':'end'))continue;
+      const line=frame.box[axis]+(side==='end'?frame.box[axis+2]:0);
+      const delta=line-(side==='end'?end:start);
+      if(Math.abs(delta)>2*tolerance||(handle&&size+(low?-delta:delta)<12))continue;
+      if(!edgeMatch||Math.abs(delta)<Math.abs(edgeMatch.delta))
+        edgeMatch={axis,delta,target:frame,line,from:side,to:side,canvasEdge:true};
+    }
+    if(edgeMatch)return edgeMatch;
+  }
   let best=null,previous=null,next=null;
   const crossGap=target=>Math.max(0,target.box[other]-crossEnd,crossStart-target.box[other]-target.box[other+2]);
   function consider(delta,target,line,from,to,equalSize=false,pair=null){
@@ -163,6 +178,10 @@ function drawGuides(rect, matches, handle, targets) {
       const {a,b,span}=m.pair,cross=rect[other]+rect[other+2]/2;
       line(axis===1,cross,a,rect[axis],true);line(axis===1,cross,rect[axis]+rect[axis+2],b,true);
       labels.push(describeAlignment(m));
+    }else if(m?.canvasEdge){
+      const fixed=m.line-(m.from==='end'?1/zoom:0);
+      line(axis===0,fixed,frame[other],frame[other]+frame[other+2],false,true);
+      labels.push(describeAlignment(m));
     }else if(m && !m.equalSize) {
       if(!(m.target.canvas&&m.from==='center'&&m.to==='center'))line(axis===0,m.line, Math.min(rect[other],m.target.box[other])-6/zoom,
         Math.max(rect[other]+rect[other+2],m.target.box[other]+m.target.box[other+2])+6/zoom);
@@ -195,7 +214,7 @@ function drawGuides(rect, matches, handle, targets) {
     if(x!==undefined&&y!==undefined){dot(x,y);labels.unshift('Corners meet · '+target.name);break}
   }
   updateAlignmentStatus(alignmentStatus(center,labels),center);
-  const objectLabels=labels.filter(label=>!label.includes('on page'));
+  const objectLabels=labels.filter(label=>!label.includes('on page')&&!label.endsWith('edge · 0 px'));
   if(objectLabels.length){
     const badge=document.createElement('span');badge.className='alignBadge';
     badge.textContent=objectLabels[0].startsWith('Corners meet')?objectLabels[0]:objectLabels.join('  /  ');

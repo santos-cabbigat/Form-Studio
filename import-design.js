@@ -102,7 +102,7 @@ function importHTMLDialog(initial='',initialName=''){
       for(const d of Object.keys(devices)){
         if(!active())return;
         status.textContent='Checking '+d+' layout…';
-        const w=pg.kind==='window'?Math.min(pg.width,project.widths[d]-24):project.widths[d];
+        const w=editableCanvasWidth(pg,project.widths[d]);
         samples.set(d,await inspectHTMLDesign(source,w));
       }
       if(!active())return;

@@ -47,3 +47,20 @@ test('legacy projects get stable device defaults and explicit settings apply to 
  assert.equal(run('validViewportHeights({laptop:0,tablet:760,phone:760})'),false);
  assert.deepEqual(run("deviceViewport({widths:{laptop:1280},viewportHeights:{laptop:800}},'laptop')"),[1280,800]);
 });
+
+test('canvas edges win over nearby layers at every corner, including a slight overshoot',()=>{
+ context.edgeTargets=[frame,{box:[7,7,947,587],name:'Inset panel'}];
+ for(const [dx,dy,expected] of [[-73,-73,[0,0,120,60]],[753,-88,[840,0,960,60]],[-88,466,[0,540,120,600]],[765,466,[840,540,960,600]]]){
+   const result=run('guidedBounds([80,80,200,140],'+dx+','+dy+',null,edgeTargets,5)');
+   assert.deepEqual(result.edges,expected);
+   assert.ok(result.matches.every(m=>m.canvasEdge));
+ }
+ assert.deepEqual(run("guidedBounds([0,0,800,500],152,96,'br',edgeTargets,5).edges"),[0,0,960,600]);
+});
+test('device-sized and custom windows share exact editable bounds with layer coordinates',()=>{
+ const result=run(`(()=>{const p=intro(),win=makePage('Window','window'),custom=makePage('Dialog','window',460),shape=createItem('Shape','Rectangle');
+ const sizes=Object.keys(devices).map(d=>{const [w,h]=bounds(win,d,p);setBox(shape,[0,0,w,h],d,p,win);return boxFor(shape,d,p,win)});
+ p.widths.laptop=1280;p.viewportHeights.laptop=800;
+ return {sizes,updated:bounds(win,'laptop',p),custom:bounds(custom,'laptop',p),phone:bounds(custom,'phone',p),radius:shape.style.radius}})()`);
+ assert.deepEqual(result,{sizes:[[0,0,960,600],[0,0,768,760],[0,0,390,760]],updated:[1280,800],custom:[460,310],phone:[390,310],radius:0});
+});

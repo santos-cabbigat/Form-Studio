@@ -82,7 +82,8 @@ function selectionSource(){
  if(kind==='element')return sourceFor(sel());
  const root=kind==='window'?'dialog':'section';
  const id=kind==='group'?nodes[0].group:pg.id;
- const size=kind==='window'?' data-width="'+pg.width+'" data-height="'+pg.height+'"':'';
+ const [width,height]=pg.deviceSized?deviceViewport(project,device):[pg.width,pg.height];
+ const size=kind==='window'?' data-width="'+width+'" data-height="'+height+'"':'';
  const parts=nodes.map(n=>'<template data-layer="'+esc(n.id)+'" data-name="'+esc(n.name)+'">\n'+sourceFor(n)+'\n</template>');
  return '<'+root+' data-studio="'+kind+'" data-id="'+esc(id)+'" data-name="'+esc(selectionTitle())+'"'+size+'>\n'+parts.join('\n\n')+'\n</'+root+'>'
 }
@@ -129,7 +130,7 @@ async function applySelection(){
          if(kind==='group')for(const n of nodes)n.groupName=plan.name;
          else if(!selected.length)pg.name=plan.name;
        }
-       if(plan.width!==null){pg.width=plan.width;pg.height=plan.height}
+       if(plan.width!==null){pg.deviceSized=false;pg.width=plan.width;pg.height=plan.height}
        placeCodeInsertions(plan,pg,kind,nodes);
        if(kind==='group'&&added)selected=pg.nodes.filter(n=>n.group===nodes[0].group).map(n=>n.id);
        else if(kind==='element'&&added)selected=[plan.insertions[0].nodes[0].id];

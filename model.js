@@ -9,7 +9,7 @@ const categoryIcon=t=>({Heading:'text',Custom:'code'}[t]||t.toLowerCase());
 const families=['Arial, sans-serif','Georgia, serif','Verdana, sans-serif','monospace'];
 const defaultColors=['#7545D6','#442881','#EAE1FF','#22202A','#FFFFFF'];
 const variants={Picker:['Date','Month','Year','Dropdown','Account'],Button:['Solid','Outline','Pill'],Text:['Heading','Paragraph','Caption'],Input:['Text','Dropdown','Number','Email','Password'],Image:['Artwork','Upload image'],Module:['Card','Panel','Outline'],Window:['Dialog','Wide dialog','Blank window'],Table:['Ledger','Simple'],Shape:['Rectangle','Circle','Oval']};
-function makePage(name,kind='screen',width=460){return {id:uid(),name,kind,width,height:kind==='window'?310:null,nodes:[]}}
+function makePage(name,kind='screen',width){return {id:uid(),name,kind,width:width??460,height:kind==='window'?310:null,nodes:[],...(kind==='window'&&width===undefined?{deviceSized:true}:{})}}
 function node(type,text,box,props={}) {
  const small={Button:[170,44],Text:[200,34],Input:[230,48],Image:[180,150],Module:[220,145],Table:[280,145],Shape:[110,90],Custom:[200,80]};
  const [w,h]=small[type]||[170,44];
@@ -21,20 +21,23 @@ function deviceViewport(project,device){
 function validViewportHeights(heights){
  return !!heights&&typeof heights==='object'&&!Array.isArray(heights)&&Object.keys(devices).every(d=>Number.isInteger(heights[d])&&heights[d]>=240&&heights[d]<=4000)&&Object.keys(heights).every(d=>Object.hasOwn(devices,d));
 }
+function editableCanvasWidth(page,deviceWidth){
+ return page?.kind==='window'&&!page.deviceSized?Math.min(page.width,deviceWidth):deviceWidth;
+}
 function bounds(page,device,project){
- if(page.kind==='window')return [Math.min(page.width,project.widths[device]-24),page.height];
+ if(page.kind==='window')return [editableCanvasWidth(page,project.widths[device]),page.deviceSized?deviceViewport(project,device)[1]:page.height];
  return [project.widths[device],Math.max(deviceViewport(project,device)[1],...page.nodes.map(n=>{const b=boxFor(n,device,project,page);return n.hide?.[device]?0:b[1]+b[3]}))];
 }
 function boxFor(n,device,p,page){
  const box=n.boxes[device]||n.boxes.laptop;
  const base=n.boxes[device]?device:'laptop';
- const src=page?.kind==='window'?Math.min(page.width,devices[base][0]-24):devices[base][0];
- const dest=page?.kind==='window'?Math.min(page.width,p.widths[device]-24):p.widths[device];
+ const src=editableCanvasWidth(page,devices[base][0]);
+ const dest=editableCanvasWidth(page,p.widths[device]);
  const scale=dest/src;
  return [Math.round(box[0]*scale),box[1],Math.max(8,Math.round(box[2]*scale)),box[3]]
 }
 function setBox(n,b,d,p,page){
- const base=page.kind==='window'?Math.min(page.width,devices[d][0]-24):devices[d][0], actual=page.kind==='window'?Math.min(page.width,p.widths[d]-24):p.widths[d];
+ const base=editableCanvasWidth(page,devices[d][0]), actual=editableCanvasWidth(page,p.widths[d]);
  n.boxes[d]=[Math.round(b[0])*base/actual,Math.round(b[1]),Math.max(8,Math.round(b[2]))*base/actual,Math.max(8,Math.round(b[3]))];
 }
 function createItem(type,variant){
@@ -44,14 +47,18 @@ function createItem(type,variant){
  if(type==='Button'&&variant==='Pill')n.style.radius=99;
  if(type==='Text')Object.assign(n.style,{fontSize:variant==='Heading'?30:variant==='Caption'?12:16,weight:variant==='Heading'?700:400});
  if(type==='Input'){n.inputType=variant==='Dropdown'?'select':variant.toLowerCase();if(variant==='Dropdown')n.choices='Option A\nOption B\nOption C';n.text=variant==='Email'?'you@example.com':variant==='Password'?'Enter password':variant==='Dropdown'?'Choose an option':variant==='Number'?'Enter a number':'Type here';n.style.fill='#FFFFFF'}
- if(type==='Shape'&&variant!=='Rectangle'){n.style.radius=999;if(variant==='Circle')n.boxes.laptop[3]=n.boxes.laptop[2]}
+ if(type==='Shape'){
+   n.style.radius=variant==='Rectangle'?0:999;
+   if(variant==='Rectangle')n.colorRoles={border:'keep'};
+   if(variant==='Circle')n.boxes.laptop[3]=n.boxes.laptop[2];
+ }
  if(type==='Image')n.src=studioArt;
  if(type==='Table'){n.rows=variant==='Ledger'?'Account | Debit | Credit\nCash | 200 | —\nSales | — | 200':'Item | Value\nFirst item | 100\nSecond item | 200';n.style.fill='#FFFFFF'}
  return n
 }
 function intro(){
  const p={format:'form-studio',version:1,name:'Workspace UI',widths:{laptop:960,tablet:768,phone:390},viewportHeights:{laptop:600,tablet:760,phone:760},theme:{accent:defaultColors[0],font:families[0],background:'#FFFFFF'},palette:[...defaultColors],templates:[],pages:[]};
- const a=makePage('Sign in'), win=makePage('Welcome window','window');p.pages=[a,win];
+ const a=makePage('Sign in'), win=makePage('Welcome window','window',460);p.pages=[a,win];
  function add(type,text,box,phone,style={},extra={}){
  const n=node(type,text,box,extra);Object.assign(n.style,style);n.boxes.phone=phone;n.boxes.tablet=[Math.round(box[0]*.8),box[1]+65,Math.round(box[2]*.8),box[3]];a.nodes.push(n);return n
  }
